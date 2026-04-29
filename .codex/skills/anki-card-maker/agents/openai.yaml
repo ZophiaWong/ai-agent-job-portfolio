@@ -1,0 +1,7 @@
+interface:
+  display_name: "Anki Card Maker"
+  short_description: "Generate focused Anki cards via MCP"
+  default_prompt: "Use $anki-card-maker to generate Anki cards from my material, preview them, and add them through Anki MCP only after I confirm."
+
+policy:
+  allow_implicit_invocation: true
