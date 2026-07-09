@@ -1,0 +1,4 @@
+interface:
+  display_name: "Interview Prep Coach"
+  short_description: "Run mock-driven interview learning loops"
+  default_prompt: "Use $interview-prep-coach to initialize my private interview prep files, run mock interviews, diagnose weak spots, and update my learning plan."

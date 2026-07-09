@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+import argparse
+import re
+from datetime import datetime
+from pathlib import Path
+
+STATE_REL = Path('.local') / 'interview-prep'
+
+
+def slugify(value):
+    slug = re.sub(r'[^a-zA-Z0-9]+', '-', value.strip().lower()).strip('-')
+    return slug[:60] or 'session'
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='Append an interview prep session log entry.')
+    parser.add_argument('--root', default='.', help='Repository root. Defaults to current directory.')
+    parser.add_argument('--type', choices=['mock', 'learn', 'review'], required=True, help='Session type.')
+    parser.add_argument('--title', required=True, help='Session title.')
+    parser.add_argument('--content', help='Entry content. Reads stdin when omitted.')
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    root = Path(args.root).resolve()
+    state_dir = root / STATE_REL
+    session_dir = state_dir / 'sessions' / args.type
+    session_dir.mkdir(parents=True, exist_ok=True)
+
+    now = datetime.now()
+    path = session_dir / f"{now:%Y-%m-%d}-{slugify(args.title)}.md"
+    content = args.content if args.content is not None else input()
+
+    if not path.exists():
+        header = (
+            f"# {args.title}\n\n"
+            f"- Type: {args.type}\n"
+            f"- Date: {now:%Y-%m-%d}\n\n"
+        )
+        path.write_text(header, encoding='utf-8')
+
+    with path.open('a', encoding='utf-8') as handle:
+        handle.write(f"\n## Entry {now:%H:%M}\n\n{content.rstrip()}\n")
+
+    print(path)
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
