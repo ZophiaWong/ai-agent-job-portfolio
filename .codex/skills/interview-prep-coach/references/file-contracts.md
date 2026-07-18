@@ -49,6 +49,10 @@ Use one unique file per task. Required metadata:
   otherwise an access date; classify each claim as implemented, planned, proposed, or unknown.
 - Proposed state changes and the user's approval decision.
 
+Before completing a `diagnostic`, `learn`, or `mock` session, follow the exact validated structure
+in `session-record-schema.md`. New sessions default to `in-progress`; arbitrary notes cannot be
+marked as completed evidence.
+
 Status values: `in-progress`, `completed`, `abandoned`. Only `completed` may propose matrix or
 weakness changes. An abandoned session is not level evidence. Resume an in-progress record with
 `scripts/log-session --session-id <id> --status <status>`. Completed and abandoned records are

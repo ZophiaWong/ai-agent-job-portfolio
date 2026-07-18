@@ -2,17 +2,22 @@
 
 Source: [ZophiaWong/meter-desk](https://github.com/ZophiaWong/meter-desk)
 
-MeterDesk is a billing-support workbench where an Agent investigates tickets through backend-owned
-tools, drafts a resolution, and routes financial actions through human approval.
+Verified snapshot: [`62aa4456b42a`](https://github.com/ZophiaWong/meter-desk/commit/62aa4456b42a8b8851a275950abec9f80fab833f) on `2026-07-18`.
 
-## Competency Anchors
+At this snapshot, MeterDesk presents a billing-support workbench whose backend governs tool use,
+resolution drafts, financial approvals, trace evidence, and offline evaluation. The labels below
+describe only what the pinned source supports; they are not a production-readiness claim.
 
-- C03: governed workflow, state transitions, retry, and recovery.
-- C04: backend-owned tools, validated arguments, audit evidence, and controlled mutations.
-- C06: outcome and trace evaluation through Eval Lab and regression history.
-- C07: FastAPI, PostgreSQL, API contracts, and operational checks.
-- C08: human approval before refund or credit mutations.
-- C09/C10: architecture tradeoffs, scope, evidence, and project communication.
+## Snapshot Claims
 
-Before a project mock, read the current public README and relevant specs. Do not claim that planned
-milestones, visible coverage gaps, or mock integrations are production implementations.
+| Truth category | Claim | Evidence | Competency |
+| --- | --- | --- | --- |
+| `implemented` | The governed agent path persists trace categories, verifies a bounded plan, and creates a pending approval instead of directly executing a financial action. | [Agent-loop tests](https://github.com/ZophiaWong/meter-desk/blob/62aa4456b42a8b8851a275950abec9f80fab833f/apps/api/tests/test_m3_agent_loop.py) | C03, C04, C08 |
+| `implemented` | Eval Lab runs deterministic outcome, planning, governance, evidence, policy, and approval-routing checks, with blocked gaps represented explicitly. | [Eval Lab tests](https://github.com/ZophiaWong/meter-desk/blob/62aa4456b42a8b8851a275950abec9f80fab833f/apps/api/tests/test_m4_eval_lab.py) | C06 |
+| `implemented` | The documented local stack uses Next.js, FastAPI, and Postgres; external payment and support integrations remain mock or out of scope. | [Pinned README](https://github.com/ZophiaWong/meter-desk/blob/62aa4456b42a8b8851a275950abec9f80fab833f/README.md) | C07, C09 |
+| `planned` | The Usage Spike governed runner remains a visible coverage gap rather than a completed scenario. | [Pinned README status](https://github.com/ZophiaWong/meter-desk/blob/62aa4456b42a8b8851a275950abec9f80fab833f/README.md) | C06, C10 |
+| `unknown` | This source snapshot does not establish production deployment, production traffic, enterprise tenancy, or real payment integration. | [Pinned README exclusions](https://github.com/ZophiaWong/meter-desk/blob/62aa4456b42a8b8851a275950abec9f80fab833f/README.md) | C09, C10 |
+
+Before each project mock, compare the moving repository with this snapshot and record the refreshed
+URL, commit SHA, and access date in the session. Reclassify changed claims. Never present a planned
+milestone, visible coverage gap, mock integration, or unverified production property as implemented.

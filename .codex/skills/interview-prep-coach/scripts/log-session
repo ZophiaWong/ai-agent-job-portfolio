@@ -16,6 +16,26 @@ from state_utils import (
 
 
 EVIDENCE_SESSION_TYPES = {'diagnostic', 'learn', 'mock'}
+ASSESSMENT_DIMENSIONS = (
+    'correctness',
+    'completeness',
+    'depth',
+    'application',
+    'tradeoffs',
+    'project_truth',
+    'communication',
+    'follow_up_resilience',
+    'epistemic_safety',
+)
+COMPLETION_SECTIONS = (
+    'Questions and answers',
+    'Evidence excerpts',
+    'Evaluator',
+    'Critic',
+    'Project evidence',
+    'Proposed state changes',
+    'Approval',
+)
 
 
 def slugify(value):
@@ -40,7 +60,7 @@ def parse_args():
     parser.add_argument(
         '--status',
         choices=['in-progress', 'completed', 'abandoned'],
-        help='New sessions default to completed; a resumed session keeps its current status.',
+        help='New sessions default to in-progress; a resumed session keeps its current status.',
     )
     parser.add_argument('--primary-competency', help='Stable competency ID, for example C05.04.')
     parser.add_argument(
@@ -155,6 +175,149 @@ def merge_topic_metadata(path, covered_topics, related_topics):
     path.write_text(text, encoding='utf-8')
 
 
+def build_entry(now, content):
+    return f"\n## Entry {now:%H:%M:%S}\n\n{content.rstrip()}\n"
+
+
+def section_body(text, heading):
+    match = re.search(
+        rf'^## {re.escape(heading)}\s*$\n(?P<body>.*?)(?=^## |\Z)',
+        text,
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    if match is None:
+        return None
+    return match.group('body').strip()
+
+
+def require_field(issues, body, label, value_pattern=r'.+', issue_label=None):
+    if re.search(
+        rf'^\s*- {re.escape(label)}:\s+{value_pattern}\s*$',
+        body,
+        flags=re.MULTILINE,
+    ) is None:
+        issues.append(issue_label or label)
+
+
+def field_value(body, label):
+    match = re.search(
+        rf'^\s*- {re.escape(label)}:\s+(?P<value>\S.*)$',
+        body,
+        flags=re.MULTILINE,
+    )
+    if match is None:
+        return None
+    return match.group('value').strip()
+
+
+def validate_completion_contract(text):
+    sections = {heading: section_body(text, heading) for heading in COMPLETION_SECTIONS}
+    issues = [heading for heading, body in sections.items() if not body]
+
+    questions = sections['Questions and answers'] or ''
+    require_field(issues, questions, 'Question')
+    require_field(issues, questions, 'Answer')
+
+    excerpts = sections['Evidence excerpts'] or ''
+    if re.search(r'^-\s+\S', excerpts, flags=re.MULTILINE) is None:
+        issues.append('Evidence excerpt')
+
+    evaluator = sections['Evaluator'] or ''
+    require_field(issues, evaluator, 'Question type')
+    for dimension in ASSESSMENT_DIMENSIONS:
+        require_field(
+            issues,
+            evaluator,
+            dimension,
+            r'(?:[0-4]|not-applicable)\s+(?:-|—)\s+.+',
+        )
+    require_field(issues, evaluator, 'Highest hint level', r'[0-4]')
+    require_field(
+        issues,
+        evaluator,
+        'Evidence state',
+        r'(?:introduced|assisted|independent|transfer-passed|retained)',
+    )
+    require_field(issues, evaluator, 'Follow-up / transfer result')
+    require_field(issues, evaluator, 'Satisfied gate')
+    require_field(issues, evaluator, 'Applied caps')
+    require_field(issues, evaluator, 'Rubric version', r'interview-prep-v1')
+    require_field(issues, evaluator, 'Judge mode')
+    require_field(issues, evaluator, 'Assessment time')
+    require_field(issues, evaluator, 'Confidence', r'(?:low|medium|high)')
+    require_field(issues, evaluator, 'Next validation')
+    require_field(issues, evaluator, 'Errors')
+    require_field(issues, evaluator, 'Omissions')
+    require_field(issues, evaluator, 'Communication issues')
+
+    critic = sections['Critic'] or ''
+    require_field(issues, critic, 'Critic result', r'(?:pass|follow-up-required)')
+
+    project_evidence = sections['Project evidence'] or ''
+    project_claims = list(
+        re.finditer(
+            r'^- Claim:\s+\S.*?$(?P<details>.*?)(?=^- Claim:|\Z)',
+            project_evidence,
+            flags=re.MULTILINE | re.DOTALL,
+        )
+    )
+    if not project_claims:
+        issues.append('Project claim')
+    for index, claim in enumerate(project_claims, start=1):
+        details = claim.group('details')
+        require_field(
+            issues,
+            details,
+            'Source snapshot',
+            issue_label=f'Project claim {index} Source snapshot',
+        )
+        require_field(
+            issues,
+            details,
+            'Truth category',
+            r'(?:implemented|planned|proposed|unknown|not-applicable)',
+            issue_label=f'Project claim {index} Truth category',
+        )
+
+    proposed_changes = sections['Proposed state changes'] or ''
+    require_field(issues, proposed_changes, 'Matrix')
+    require_field(issues, proposed_changes, 'Weaknesses')
+    require_field(issues, proposed_changes, 'Plan')
+
+    approval = sections['Approval'] or ''
+    require_field(
+        issues,
+        approval,
+        'Approval decision',
+        r'(?:approved|rejected|partial)',
+    )
+
+    confidence = field_value(evaluator, 'Confidence')
+    critic_result = field_value(critic, 'Critic result')
+    epistemic_safety = field_value(evaluator, 'epistemic_safety')
+    matrix_change = field_value(proposed_changes, 'Matrix')
+    unsafe_epistemics = (
+        epistemic_safety is not None
+        and epistemic_safety.split(maxsplit=1)[0] in {'0', '1'}
+    )
+    if (
+        matrix_change is not None
+        and (confidence == 'low' or critic_result == 'follow-up-required' or unsafe_epistemics)
+        and matrix_change.lower() != 'no change'
+    ):
+        issues.append(
+            'Matrix must be no change when confidence is low, the Critic requires '
+            'follow-up, or epistemic_safety is 0-1'
+        )
+
+    if issues:
+        unique_issues = list(dict.fromkeys(issues))
+        raise ValueError(
+            'Completion contract is incomplete or invalid; missing/invalid: '
+            + ', '.join(unique_issues)
+        )
+
+
 def main():
     args = parse_args()
     root = Path(args.root).resolve()
@@ -180,6 +343,7 @@ def main():
 
     now = datetime.now().astimezone()
     content = args.content if args.content is not None else sys.stdin.read()
+    entry = build_entry(now, content)
     resumed_status = None
 
     if args.session_id is not None:
@@ -207,7 +371,6 @@ def main():
             existing_primary = read_primary_competency(path)
             if args.primary_competency is not None:
                 if existing_primary == 'not-set':
-                    update_primary_competency(path, args.primary_competency)
                     existing_primary = args.primary_competency
                 elif existing_primary != args.primary_competency:
                     raise ValueError(
@@ -221,6 +384,10 @@ def main():
                 raise ValueError(
                     '--primary-competency is required before completing this session'
                 )
+            if args.type in EVIDENCE_SESSION_TYPES and args.status == 'completed':
+                validate_completion_contract(path.read_text(encoding='utf-8') + entry)
+            if args.primary_competency is not None and read_primary_competency(path) == 'not-set':
+                update_primary_competency(path, args.primary_competency)
             if args.covered_topic or args.related_topic:
                 merge_topic_metadata(path, args.covered_topic, args.related_topic)
             resumed_status = args.status
@@ -231,7 +398,7 @@ def main():
             raise SystemExit(
                 '--primary-competency is required for diagnostic, learn, and mock sessions'
             )
-        status = args.status or 'completed'
+        status = args.status or 'in-progress'
         base_session_id = f'{args.type}-{now:%Y%m%d-%H%M%S-%f}-{slugify(args.title)}'
         covered_topics = json.dumps(
             list(dict.fromkeys(args.covered_topic)), ensure_ascii=False
@@ -252,6 +419,12 @@ def main():
                 f"- Related topics: {related_topics}\n\n"
             )
 
+        if args.type in EVIDENCE_SESSION_TYPES and status == 'completed':
+            try:
+                validate_completion_contract(build_header(base_session_id) + entry)
+            except ValueError as exc:
+                raise SystemExit(str(exc)) from exc
+
         try:
             path, _ = write_exclusive_with_suffix(
                 session_dir, base_session_id, build_header, root
@@ -260,7 +433,7 @@ def main():
             raise SystemExit(str(exc)) from exc
 
     with path.open('a', encoding='utf-8') as handle:
-        handle.write(f"\n## Entry {now:%H:%M:%S}\n\n{content.rstrip()}\n")
+        handle.write(entry)
 
     if resumed_status is not None:
         try:

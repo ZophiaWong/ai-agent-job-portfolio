@@ -38,12 +38,12 @@ Use the LLM rubric only for explanation, design judgment, and communication arou
 
 Produce:
 
-- competency and question type;
+- competency and `Question type`;
 - dimension scores with one-line reasons;
 - verbatim answer excerpts supporting strengths and problems;
 - errors, omissions, and communication issues as separate lists;
 - highest hint level and evidence state;
-- follow-up or transfer result;
+- `Follow-up / transfer result`;
 - confidence: `low`, `medium`, or `high`;
 - recommended next validation;
 - proposed matrix, weakness, and plan changes.
@@ -84,7 +84,8 @@ Assign confidence consistently:
 - `high`: at least two independent observations include transfer or retained evidence, applicable
   deterministic checks pass, sources are recorded, and the Critic finds no material conflict.
 
-Report the satisfied gate and every applied cap. Confirmation still governs any state write.
+Report the result as `Satisfied gate` and `Applied caps`. Confirmation still governs any state
+write.
 
 ## Critic Pass
 
@@ -99,7 +100,8 @@ Before proposing a state change, check:
 7. Is confidence justified by enough evidence?
 
 If the Critic finds a material conflict or confidence is low, do not change the confirmed level.
-Ask one discriminating follow-up or schedule a retest.
+Ask one discriminating follow-up or schedule a retest, and record `Matrix: no change`. Apply the
+same no-change rule when `epistemic_safety <= 1`.
 
 ## State-Change Gates
 

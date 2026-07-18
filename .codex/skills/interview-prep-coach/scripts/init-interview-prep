@@ -48,6 +48,11 @@ def main():
             raise SystemExit(str(exc)) from exc
         source = templates_dir / name
         if target.exists():
+            if not target.is_file():
+                raise SystemExit(
+                    f'Expected state file but found another node type: '
+                    f'{target.relative_to(root)}'
+                )
             preserved.append(str(target.relative_to(root)))
             continue
         shutil.copyfile(source, target)
@@ -64,6 +69,11 @@ def main():
         except ValueError as exc:
             raise SystemExit(str(exc)) from exc
         if session_dir.exists():
+            if not session_dir.is_dir():
+                raise SystemExit(
+                    f'Expected session directory but found another node type: '
+                    f'{session_dir.relative_to(root)}'
+                )
             preserved.append(str(session_dir.relative_to(root)) + '/')
         else:
             session_dir.mkdir(parents=True)

@@ -16,7 +16,8 @@ teach interactively, assess from evidence, and keep personal state private and a
 3. Read `goal.md`, `plan.md`, `weaknesses.md`, and `competency-matrix.md`; load resume,
    project, story, JD, and prior-session context only when relevant.
 4. Select exactly one mode: `diagnostic`, `learn`, `mock`, or `review`.
-5. Use `scripts/log-session` for a unique session record after the user approves logging.
+5. Read `references/session-record-schema.md` before completing an evidence session. Use
+   `scripts/log-session` for a unique session record after the user approves logging.
 
 ## Mode Router
 
