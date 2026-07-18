@@ -2,9 +2,9 @@
 
 Private project notes for project deep-dive mock interviews.
 
-## Project 1
+## MeterDesk
 
-- Name:
+- Repository: https://github.com/ZophiaWong/meter-desk
 - Goal:
 - Users / business context:
 - Architecture:
@@ -13,11 +13,16 @@ Private project notes for project deep-dive mock interviews.
 - Metrics or evidence:
 - Risks / tradeoffs:
 - What I personally did:
+- Implemented / planned boundary:
+- Likely follow-ups:
 
-## Project 2
+## Forge Harness
 
-- Name:
+- Repository: https://github.com/ZophiaWong/forge-harness
 - Goal:
 - Architecture:
 - Hardest problem:
 - What I personally did:
+- Latest completed checkpoint:
+- Implemented / planned boundary:
+- Likely follow-ups:
