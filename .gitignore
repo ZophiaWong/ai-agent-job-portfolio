@@ -1,5 +1,6 @@
 # Local workspace state
 .local/
+.superpowers/
 
 # Python caches and test artifacts
 __pycache__/
