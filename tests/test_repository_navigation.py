@@ -1,4 +1,5 @@
 import re
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -30,6 +31,17 @@ PUBLIC_MARKDOWN_ROOTS = [
     REPO_ROOT / "best-practice",
     REPO_ROOT / "projects",
     REPO_ROOT / ".codex" / "skills" / "anki-card-maker" / "references",
+]
+TASK_ONE_NAVIGATION_PAGES = [
+    REPO_ROOT / "README.md",
+    REPO_ROOT / "interviews-docs" / "README.md",
+    REPO_ROOT / "interviews-docs" / "01-AI" / "README.md",
+    REPO_ROOT / "interviews-docs" / "02-后端" / "README.md",
+    REPO_ROOT / "interviews-docs" / "04-career" / "README.md",
+    REPO_ROOT / "best-practice" / "README.md",
+    REPO_ROOT
+    / "AI_Agent_System_Practical_Reference"
+    / "00_README_学习路线与资料使用说明.md",
 ]
 
 
@@ -63,6 +75,39 @@ class RepositoryNavigationTest(unittest.TestCase):
                 ).resolve()
                 with self.subTest(page=page.relative_to(REPO_ROOT), target=target):
                     self.assertTrue(resolved.exists(), f"broken link in {page}: {target}")
+
+    def test_task_one_navigation_local_targets_are_tracked(self):
+        indexed_paths = set(
+            subprocess.run(
+                ["git", "ls-files", "--cached", "-z"],
+                cwd=REPO_ROOT,
+                check=True,
+                capture_output=True,
+            )
+            .stdout.decode()
+            .split("\0")
+        )
+
+        for page in TASK_ONE_NAVIGATION_PAGES:
+            text = page.read_text(encoding="utf-8")
+            for target in LINK_RE.findall(text):
+                target = target.strip().strip("<>")
+                if target.startswith(("http://", "https://", "mailto:", "#")):
+                    continue
+                clean_target = target.split("#", 1)[0].split(" ", 1)[0]
+                if not clean_target:
+                    continue
+                resolved = (
+                    REPO_ROOT / clean_target.lstrip("/")
+                    if clean_target.startswith("/")
+                    else page.parent / clean_target
+                ).resolve()
+                with self.subTest(page=page.relative_to(REPO_ROOT), target=target):
+                    self.assertIn(
+                        resolved.relative_to(REPO_ROOT).as_posix(),
+                        indexed_paths,
+                        f"untracked navigation target in {page}: {target}",
+                    )
 
     def test_competency_matrix_covers_every_public_competency_id(self):
         skill_root = REPO_ROOT / ".codex" / "skills" / "interview-prep-coach"
