@@ -480,6 +480,43 @@ class LearningMaterialsTest(unittest.TestCase):
                 re.compile(r"\[Python vs NodeJS\]\([^)]*05-misc/python-vs-nodejs\.md\)"),
             )
 
+    def test_agent_assisted_development_materials_keep_evidence_boundaries(self):
+        practice_dir = REPO_ROOT / "best-practice" / "agent-assisted-development"
+        readme = practice_dir / "README.md"
+        checklist = practice_dir / "workflow-checklist.md"
+        index = (REPO_ROOT / "best-practice" / "README.md").read_text(encoding="utf-8")
+
+        self.assertFalse((REPO_ROOT / "best-practice" / "vibe-coding").exists())
+        self.assertTrue(readme.is_file(), "missing agent-assisted development guide")
+        self.assertTrue(checklist.is_file(), "missing operational checklist")
+        self.assertIn(
+            "[受控的 Agent 辅助开发](agent-assisted-development/README.md)", index
+        )
+
+        text = "\n".join(
+            (readme.read_text(encoding="utf-8"), checklist.read_text(encoding="utf-8"))
+        )
+        self.assertNotIn("我做过一个代码助手方向的实践", text)
+        self.assertRegex(
+            text,
+            re.compile(r"历史.*公共.*vibe coding.*受控.*Agent 辅助开发", re.DOTALL),
+        )
+        self.assertIn("https://x.com/karpathy/status/1886192184808149383", text)
+        self.assertIn("访问日期：2026-07-19。", text)
+        for evidence in (
+            "https://github.com/ZophiaWong/forge-harness/blob/"
+            "9c1b1dbb0566e9053457db50e64cd374848de856/test/tools/toolRuntime.test.ts",
+            "https://github.com/ZophiaWong/forge-harness/blob/"
+            "9c1b1dbb0566e9053457db50e64cd374848de856/test/runtime/verification.test.ts",
+            "https://github.com/ZophiaWong/forge-harness/blob/"
+            "9c1b1dbb0566e9053457db50e64cd374848de856/test/extensions/childSessions.test.ts",
+        ):
+            with self.subTest(evidence=evidence):
+                self.assertIn(evidence, text)
+        self.assertRegex(text, re.compile(r"测量候选指标[\s\S]{0,480}任务完成时间"))
+        self.assertRegex(text, re.compile(r"测量候选指标[\s\S]{0,480}返工率"))
+        self.assertIn("范围 → 上下文 → 计划 → 最小 patch → 验证 → review → bad case 回流", text)
+
 
 if __name__ == "__main__":
     unittest.main()
