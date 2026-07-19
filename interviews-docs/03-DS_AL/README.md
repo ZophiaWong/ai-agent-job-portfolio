@@ -11,7 +11,7 @@
 
 ## 练习闭环与能力映射
 
-每次练习按[统一练习协议](../practice-protocol.md)完成并保存可检查的代码、运行结果或手动推演；本系列不在各章重复该协议的完整步骤。
+每次练习按[统一练习协议](../practice-protocol.md)完成。有效证据必须是可运行代码加执行输出，或记录可复核的手动 trace/check；未检查的代码不能单独作为证据。本系列不在各章重复该协议的完整步骤。
 
 - [C12.02](../../.codex/skills/interview-prep-coach/references/competency-model.md)：用 Python 解数组、哈希、窗口、树、图、堆和 DP 的常见题。
 - [C12.03](../../.codex/skills/interview-prep-coach/references/competency-model.md)：先澄清约束，再用边界 case 和复杂度说明验证方案。
