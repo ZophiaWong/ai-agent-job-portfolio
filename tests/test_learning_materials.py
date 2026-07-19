@@ -1,9 +1,11 @@
+import asyncio
 import io
 import re
 import subprocess
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from types import SimpleNamespace
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -1048,7 +1050,71 @@ class LearningMaterialsTest(unittest.TestCase):
                     approval.index("validate_action("),
                     approval.rindex('"decision": "approved"'),
                 )
+                self.assertRegex(
+                    approval,
+                    re.compile(
+                        r'"decision": "rejected".*?"validation_error": None',
+                        re.DOTALL,
+                    ),
+                )
+                self.assertRegex(
+                    approval,
+                    re.compile(
+                        r'"decision": "approved".*?"validation_error": None',
+                        re.DOTALL,
+                    ),
+                )
                 self.assertNotIn('review.get("action", state["proposed"])', approval)
+
+    def test_langgraph_partial_state_updates_clear_stale_validation_errors(self):
+        for path, _, reference_zone in self.langgraph_practice_zones():
+            with self.subTest(path=path.name):
+                state_schema = next(
+                    block
+                    for block in python_fences(reference_zone)
+                    if "class AgentState" in block
+                )
+                self.assertRegex(state_schema, re.compile(r"validation_error:\s*str\s*\|\s*None"))
+
+                approval = next(
+                    block
+                    for block in python_fences(reference_zone)
+                    if "def approval_node" in block
+                ).replace("from langgraph.types import interrupt\n", "")
+                review = {"decision": "approev", "action": {"malicious": True}}
+
+                def interrupt(_payload):
+                    return review
+
+                def validate_action(candidate, **_kwargs):
+                    return SimpleNamespace(ok=True, value=candidate, error=None)
+
+                namespace = {
+                    "AgentState": dict,
+                    "Action": dict,
+                    "ACTION_ALLOWLIST": {"send_notification", "create_ticket"},
+                    "interrupt": interrupt,
+                    "validate_action": validate_action,
+                }
+                exec(compile(approval, f"{path.name}:approval-transition", "exec"), namespace)
+
+                state = {"proposed": {"kind": "send_notification"}}
+                state.update(namespace["approval_node"](state))
+                self.assertEqual(state["decision"], "pending")
+                self.assertIsInstance(state["validation_error"], str)
+                self.assertEqual(namespace["route_after_approval"](state), "approval")
+
+                review.clear()
+                review.update(
+                    {
+                        "decision": "edit",
+                        "action": {"kind": "send_notification", "body": "checked"},
+                    }
+                )
+                state.update(namespace["approval_node"](state))
+                self.assertEqual(state["decision"], "approved")
+                self.assertIsNone(state["validation_error"])
+                self.assertEqual(namespace["route_after_approval"](state), "execute")
 
     def test_langgraph_async_resume_and_outcome_states_are_coherent(self):
         for path, _, reference_zone in self.langgraph_practice_zones():
@@ -1092,6 +1158,8 @@ class LearningMaterialsTest(unittest.TestCase):
                     'if outcome == "unknown":', maxsplit=1
                 )[1].split('\n\n    if outcome == "success":', maxsplit=1)[0]
                 self.assertIn("lookup", unknown_lookup)
+                self.assertIn("except (TimeoutError, ConnectionError):", unknown_lookup)
+                self.assertIn("cached = None", unknown_lookup)
                 self.assertNotIn('"executed": False', unknown_lookup)
                 self.assertNotIn('"execution_status": "failed"', unknown_lookup)
                 self.assertLess(
@@ -1099,6 +1167,72 @@ class LearningMaterialsTest(unittest.TestCase):
                     execution.rindex(
                         '"executed": None, "execution_status": "unknown"'
                     ),
+                )
+
+    def test_langgraph_lookup_transport_uncertainty_returns_unknown(self):
+        class UncertainTool:
+            async def send(self, *_args, **_kwargs):
+                raise TimeoutError("initial result unknown")
+
+            async def execute(self, *_args, **_kwargs):
+                raise TimeoutError("initial result unknown")
+
+            async def lookup(self, **_kwargs):
+                raise ConnectionError("lookup also uncertain")
+
+            @staticmethod
+            def classify_outcome(_action, result):
+                return "unknown" if result is None else "success"
+
+        for path, _, reference_zone in self.langgraph_practice_zones():
+            with self.subTest(path=path.name):
+                execution = next(
+                    block
+                    for block in python_fences(reference_zone)
+                    if "async def execute" in block
+                )
+                tool = UncertainTool()
+
+                def validate_action(action, **_kwargs):
+                    return SimpleNamespace(ok=True, value=action, error=None)
+
+                namespace = {
+                    "Action": dict,
+                    "AgentState": dict,
+                    "validate_action": validate_action,
+                    "ACTION_ALLOWLIST": {"send_notification", "create_ticket"},
+                    "notification_tool": tool,
+                    "tool_gateway": tool,
+                    "classify_tool_outcome": (
+                        lambda result, _action: "unknown" if result is None else "success"
+                    ),
+                }
+                exec(compile(execution, f"{path.name}:uncertain-lookup", "exec"), namespace)
+                if path == LANGGRAPH_CHAPTER:
+                    action = {
+                        "tenant_id": "tenant-7",
+                        "business_action_id": "send-42",
+                        "recipient_id": "user-9",
+                        "body": "notice",
+                    }
+                    function_name = "execute_node"
+                else:
+                    action = {
+                        "tenant_id": "tenant-7",
+                        "kind": "send_notification",
+                        "business_action_id": "send-42",
+                        "business_object_id": "user-9",
+                        "arguments": {"body": "notice"},
+                    }
+                    function_name = "execute_action_node"
+                result = asyncio.run(
+                    namespace[function_name](
+                        {"decision": "approved", "approved": action}
+                    )
+                )
+                self.assertEqual(
+                    result,
+                    {"executed": None, "execution_status": "unknown", "tool_result": None},
                 )
 
     def test_langgraph_idempotency_uses_stable_business_action_identity(self):
