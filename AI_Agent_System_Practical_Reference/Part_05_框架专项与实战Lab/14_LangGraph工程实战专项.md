@@ -88,6 +88,7 @@ from typing import Literal, TypedDict
 class Action(TypedDict):
     kind: Literal["send_notification"]
     tenant_id: str
+    business_action_id: str
     recipient_id: str
     body: str
 
@@ -95,12 +96,13 @@ class AgentState(TypedDict, total=False):
     proposed: Action
     approved: Action
     decision: Literal["pending", "approved", "rejected"]
-    executed: bool
-    execution_status: Literal["not_started", "success", "failed", "cancelled"]
+    executed: bool | None
+    execution_status: Literal["not_started", "success", "failed", "cancelled", "unknown"]
     tool_result: dict
+    validation_error: str
 ```
 
-`approved` 表示允许按冻结参数执行，`executed` 表示副作用已经发生。二者不能共用一个布尔值。拒绝、取消、调用失败也要分开记录。
+`approved` 表示允许按冻结参数执行。`executed=True` 表示副作用已经发生，`False` 表示确定未发生，`None` 表示外部结果仍不确定。批准、执行和结果确认不能共用一个布尔值；拒绝、取消、确定失败和未知也要分开记录。
 
 ### 在审批边界真正暂停
 
@@ -116,21 +118,53 @@ def approval_node(state: AgentState) -> dict:
         }
     )
 
-    if review["decision"] == "reject":
+    if not isinstance(review, dict):
+        return {
+            "decision": "pending",
+            "executed": False,
+            "execution_status": "not_started",
+            "validation_error": "review payload must be an object",
+        }
+
+    decision = review.get("decision")
+    if decision == "reject":
         return {
             "decision": "rejected",
             "executed": False,
             "execution_status": "cancelled",
         }
 
-    edited_or_original = review.get("action", state["proposed"])
-    checked = validate_action(edited_or_original, allowlist=ACTION_ALLOWLIST, schema=Action)
-    return {"approved": checked, "decision": "approved", "executed": False}
+    if decision not in {"approve", "edit"}:
+        return {
+            "decision": "pending",
+            "executed": False,
+            "execution_status": "not_started",
+            "validation_error": "decision must be approve, edit, or reject",
+        }
+
+    candidate = state["proposed"] if decision == "approve" else review.get("action")
+    if not isinstance(candidate, dict):
+        return {
+            "decision": "pending",
+            "executed": False,
+            "execution_status": "not_started",
+            "validation_error": "edit requires an action object",
+        }
+
+    validation = validate_action(candidate, allowlist=ACTION_ALLOWLIST, schema=Action)
+    if not validation.ok:
+        return {
+            "decision": "pending",
+            "executed": False,
+            "execution_status": "not_started",
+            "validation_error": validation.error,
+        }
+    return {"approved": validation.value, "decision": "approved", "executed": False}
 ```
 
 `interrupt()` 的 payload 必须可 JSON 序列化。恢复时，包含 interrupt 的节点会从头重新执行；interrupt() 前的副作用必须移走、变成幂等操作，或被事务边界包住。不要先创建审批记录、发消息，再指望代码从 interrupt 下一行继续。
 
-编辑后的动作也不可信。先经过 allowlist 和 schema 校验，再进入执行节点。校验必须发生在副作用之前。
+空值、`cancel`、拼写错误或未知 decision 都回到 pending，并带验证错误；只有显式的 `approve` 或 `edit` 能进入批准分支。编辑后的动作也不可信，要先经过 allowlist 和 schema 校验，再进入执行节点。校验必须发生在副作用之前。图用 conditional edge 把带 `validation_error` 的 pending 状态路由回审批节点，让下一次 node invocation 再调用一次 `interrupt()`。
 
 ### 使用同一 thread 恢复
 
@@ -139,14 +173,16 @@ from langgraph.types import Command
 
 config = {"configurable": {"thread_id": "notification:tenant-7:req-42"}}
 
-# 首次调用运行到 interrupt() 并保存 checkpoint
-paused = graph.invoke({"proposed": action}, config=config)
+async def run_approval_roundtrip(graph, action):
+    # 首次调用运行到 interrupt() 并保存 checkpoint
+    paused = await graph.ainvoke({"proposed": action}, config=config)
 
-# 同一个 config；resume 值会成为 interrupt() 的返回值
-resumed = graph.invoke(
-    Command(resume={"decision": "approve", "action": action}),
-    config=config,
-)
+    # 同一个 config；resume 值会成为 interrupt() 的返回值
+    resumed = await graph.ainvoke(
+        Command(resume={"decision": "approve", "action": action}),
+        config=config,
+    )
+    return paused, resumed
 ```
 
 如果恢复请求换了 `thread_id`，它不会继续原 checkpoint。Web 接口收到 approval id 后，应先查出对应 thread identity，再调用 `Command(resume=...)`；不能只更新一张 approval 表然后假设图会自动醒来。
@@ -158,8 +194,13 @@ import hashlib
 import json
 
 def action_idempotency_key(action: Action) -> str:
-    normalized = json.dumps(action, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    stable_business_identity = f"{action['tenant_id']}:{action['recipient_id']}"
+    normalized = json.dumps(
+        {"recipient_id": action["recipient_id"], "body": action["body"]},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    stable_business_identity = f"{action['tenant_id']}:{action['business_action_id']}"
     digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
     return f"send_notification:{stable_business_identity}:{digest}"
 
@@ -167,16 +208,38 @@ async def execute_node(state: AgentState) -> dict:
     if state.get("decision") != "approved":
         return {"executed": False, "execution_status": "cancelled"}
 
-    action = validate_action(state["approved"], allowlist=ACTION_ALLOWLIST, schema=Action)
+    validation = validate_action(state["approved"], allowlist=ACTION_ALLOWLIST, schema=Action)
+    if not validation.ok:
+        return {
+            "executed": False,
+            "execution_status": "failed",
+            "validation_error": validation.error,
+        }
+    action = validation.value
     key = action_idempotency_key(action)
-    result = await notification_tool.send(action, idempotency_key=key)
+    try:
+        result = await notification_tool.send(action, idempotency_key=key)
+    except (TimeoutError, ConnectionError):
+        result = None
 
-    if not verify_tool_outcome(result, expected_recipient=action["recipient_id"]):
+    outcome = classify_tool_outcome(result, action)
+    if outcome == "unknown":
+        result = await notification_tool.lookup(
+            idempotency_key=key,
+            business_action_id=action["business_action_id"],
+        )
+        outcome = classify_tool_outcome(result, action)
+
+    if outcome == "success":
+        return {"executed": True, "execution_status": "success", "tool_result": result}
+    if outcome == "failure":
         return {"executed": False, "execution_status": "failed", "tool_result": result}
-    return {"executed": True, "execution_status": "success", "tool_result": result}
+    return {"executed": None, "execution_status": "unknown", "tool_result": result}
 ```
 
-幂等键要由稳定业务标识和规范化动作参数生成。`task_id:tool_name` 不足：同一 task 内两个不同动作会冲突，重放同一业务动作也可能换 task。工具结果经过验证后才能写 `success`；超时、拒绝和取消都不能写成功。
+幂等键要由稳定业务标识和规范化动作参数生成。这里的 `business_action_id` 代表业务上同一次“发送”意图，用来区分业务上独立但参数相同的动作；业务 ID 不是随机调用 ID，也不应在每次重试时重建。`task_id:tool_name` 不足：同一 task 内两个不同动作会冲突，重放同一业务动作也可能换 task。
+
+工具结果有 `success`、`failure`、`unknown` 三种。超时或响应丢失时，先用幂等键和业务对象查询；仍无法确认就保留 `executed=None` 和 `unknown`。只有查到确定性失败证据才能写 `failed`，只有验证了成功结果才能写 `success`。
 
 生产实现还需要数据库唯一约束和结果查询，不能只靠进程内字符串。
 
@@ -186,10 +249,10 @@ async def execute_node(state: AgentState) -> dict:
 START
   → propose_action
   → approval_node  -- interrupt / resume --> approved | rejected
-  → route_decision
+      ├── invalid → pending + validation_error → approval_node
       ├── rejected → END
       └── approved → execute_node
-                       → verified success | failed
+                       → verified success | verified failure | unknown
                        → END
 ```
 

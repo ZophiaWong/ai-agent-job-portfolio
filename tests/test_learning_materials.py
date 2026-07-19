@@ -985,36 +985,148 @@ class LearningMaterialsTest(unittest.TestCase):
         self.assertRegex(security, re.compile(r"不得.{0,32}token passthrough", re.IGNORECASE))
         self.assertRegex(reference_zone, re.compile(r"设计示例.{0,100}未.*仓库.*执行", re.DOTALL))
 
-    def test_langgraph_hitl_pattern_has_pause_resume_and_execution_truth(self):
-        chapter = LANGGRAPH_CHAPTER.read_text(encoding="utf-8")
-        lab = END_TO_END_LAB.read_text(encoding="utf-8")
-
-        for path, text in ((LANGGRAPH_CHAPTER, chapter), (END_TO_END_LAB, lab)):
+    def langgraph_practice_zones(self):
+        cases = (
+            (
+                LANGGRAPH_CHAPTER,
+                "<!-- LangGraph 参考分隔线：完成冷答后再继续 -->",
+                "C03.03",
+                "langgraph-hitl-cold.md",
+            ),
+            (
+                END_TO_END_LAB,
+                "<!-- Lab 参考分隔线：完成冷答后再继续 -->",
+                "C08.02",
+                "agent-lab-cold-design.md",
+            ),
+        )
+        zones = []
+        for path, marker, competency, artifact in cases:
+            text = path.read_text(encoding="utf-8")
+            self.assertIn(marker, text)
+            cold_zone, reference_zone = text.split(marker, maxsplit=1)
+            zones.append((path, cold_zone, reference_zone))
             with self.subTest(path=path.name):
-                self.assertRegex(text, re.compile(r"主要能力：C(?:03\.03|08\.02)"))
-                self.assertRegex(text, re.compile(r"冷启动|冷答"))
-                self.assertRegex(text, re.compile(r"`[^`]+\.md`"))
-                self.assertRegex(text, re.compile(r"改变约束|迁移题"))
-                self.assertIn("延迟复测", text)
-                self.assertRegex(text, re.compile(r"compile\(checkpointer="))
-                self.assertIn('config = {"configurable": {"thread_id":', text)
-                self.assertIn("interrupt(", text)
-                self.assertIn("Command(resume=", text)
-                self.assertRegex(text, re.compile(r"同一.{0,30}thread_id", re.DOTALL))
-                self.assertRegex(text, re.compile(r"节点.{0,30}(?:重新|从头).{0,30}执行", re.DOTALL))
-                self.assertRegex(text, re.compile(r"interrupt\(\).{0,100}副作用.{0,100}幂等", re.DOTALL))
-                for state in ("proposed", "approved", "rejected", "executed"):
-                    self.assertIn(state, text)
-                self.assertRegex(text, re.compile(r"allowlist.{0,80}schema", re.IGNORECASE | re.DOTALL))
-                self.assertRegex(text, re.compile(r"校验.{0,100}副作用", re.DOTALL))
-                self.assertRegex(text, re.compile(r"工具结果.{0,100}验证.{0,100}success", re.DOTALL))
+                self.assertIn(f"主要能力：{competency}", cold_zone)
+                self.assertRegex(cold_zone, re.compile(r"冷启动|冷答"))
+                self.assertIn(artifact, cold_zone)
+                self.assertRegex(cold_zone, re.compile(r"改变约束|迁移题"))
+                self.assertIn("延迟复测", cold_zone)
+                self.assertNotIn("compile(checkpointer=", cold_zone)
+                self.assertIn("compile(checkpointer=", reference_zone)
+        return zones
+
+    def test_langgraph_practice_puts_cold_evidence_before_reference(self):
+        self.langgraph_practice_zones()
+
+    def test_langgraph_approval_nodes_fail_closed_on_unknown_decisions(self):
+        for path, _, reference_zone in self.langgraph_practice_zones():
+            with self.subTest(path=path.name):
+                approval = next(
+                    block
+                    for block in python_fences(reference_zone)
+                    if "def approval_node" in block
+                )
+                compile(approval, f"{path.name}:approval_node", "exec")
+                self.assertIn("if not isinstance(review, dict):", approval)
+                self.assertIn('decision = review.get("decision")', approval)
+                self.assertIn('if decision == "reject":', approval)
+                self.assertIn('if decision not in {"approve", "edit"}:', approval)
                 self.assertRegex(
-                    text,
+                    approval,
+                    re.compile(
+                        r"if decision not in \{\"approve\", \"edit\"\}:.*?"
+                        r'"decision": "pending".*?"validation_error"',
+                        re.DOTALL,
+                    ),
+                )
+                self.assertLess(
+                    approval.index('if decision not in {"approve", "edit"}:'),
+                    approval.index("validate_action("),
+                )
+                self.assertLess(
+                    approval.index("validate_action("),
+                    approval.rindex('"decision": "approved"'),
+                )
+                self.assertNotIn('review.get("action", state["proposed"])', approval)
+
+    def test_langgraph_async_resume_and_outcome_states_are_coherent(self):
+        for path, _, reference_zone in self.langgraph_practice_zones():
+            with self.subTest(path=path.name):
+                invocation = next(
+                    block
+                    for block in python_fences(reference_zone)
+                    if "Command(resume=" in block
+                )
+                compile(invocation, f"{path.name}:resume", "exec")
+                self.assertIn("async def run_approval_roundtrip", invocation)
+                self.assertEqual(invocation.count("await graph.ainvoke("), 2)
+                self.assertNotIn("graph.invoke(", invocation)
+
+                execution = next(
+                    block
+                    for block in python_fences(reference_zone)
+                    if "async def execute" in block
+                )
+                compile(execution, f"{path.name}:execute", "exec")
+                self.assertIn('if outcome == "success":', execution)
+                self.assertIn('if outcome == "failure":', execution)
+                self.assertIn("lookup", execution)
+                self.assertIn(
+                    '"executed": None, "execution_status": "unknown"', execution
+                )
+                timeout_body = execution.split(
+                    "except (TimeoutError, ConnectionError):", maxsplit=1
+                )[1].split("\n\n    outcome =", maxsplit=1)[0]
+                self.assertNotIn('"executed": False', timeout_body)
+                self.assertNotIn('"execution_status": "failed"', timeout_body)
+                self.assertRegex(
+                    execution,
+                    re.compile(
+                        r'if outcome == "failure":.*?'
+                        r'"executed": False.*?"execution_status": "failed"',
+                        re.DOTALL,
+                    ),
+                )
+                unknown_lookup = execution.split(
+                    'if outcome == "unknown":', maxsplit=1
+                )[1].split('\n\n    if outcome == "success":', maxsplit=1)[0]
+                self.assertIn("lookup", unknown_lookup)
+                self.assertNotIn('"executed": False', unknown_lookup)
+                self.assertNotIn('"execution_status": "failed"', unknown_lookup)
+                self.assertLess(
+                    execution.index('if outcome == "failure":'),
+                    execution.rindex(
+                        '"executed": None, "execution_status": "unknown"'
+                    ),
+                )
+
+    def test_langgraph_idempotency_uses_stable_business_action_identity(self):
+        for path, _, reference_zone in self.langgraph_practice_zones():
+            with self.subTest(path=path.name):
+                key_block = next(
+                    block
+                    for block in python_fences(reference_zone)
+                    if "def action_" in block and "sha256" in block
+                )
+                compile(key_block, f"{path.name}:idempotency", "exec")
+                self.assertRegex(key_block, re.compile(r"business_(?:object|action)_id"))
+                self.assertRegex(key_block, re.compile(r"normalized(?:_arguments)?\s*="))
+                self.assertRegex(
+                    reference_zone,
                     re.compile(r"业务标识.{0,100}规范化.{0,100}(?:参数|动作)", re.DOTALL),
                 )
-                self.assertRegex(text, re.compile(r"task_id:tool_name.{0,100}(?:不足|冲突)", re.DOTALL))
-                self.assertNotIn("f\"{state['task_id']}:{tool_name}\"", text)
+                self.assertRegex(
+                    reference_zone,
+                    re.compile(r"业务.*ID.{0,100}不(?:是|等于).*随机.*(?:调用|请求).*ID", re.DOTALL),
+                )
+                self.assertRegex(
+                    reference_zone,
+                    re.compile(r"task_id:tool_name.{0,100}(?:不足|冲突)", re.DOTALL),
+                )
 
+        chapter = LANGGRAPH_CHAPTER.read_text(encoding="utf-8")
+        lab = END_TO_END_LAB.read_text(encoding="utf-8")
         self.assertRegex(chapter, re.compile(r"InMemorySaver.{0,100}(?:演示|demo)", re.IGNORECASE | re.DOTALL))
         self.assertRegex(chapter, re.compile(r"生产.{0,100}持久化|持久化.{0,100}生产", re.DOTALL))
         self.assertRegex(
