@@ -36,6 +36,7 @@ DSA_CHAPTERS = (
     "06_回溯与搜索.md",
     "07_堆栈队列二分.md",
 )
+PYTHON_DIR = REPO_ROOT / "interviews-docs" / "05-misc" / "python"
 
 
 class LearningMaterialsTest(unittest.TestCase):
@@ -137,6 +138,65 @@ class LearningMaterialsTest(unittest.TestCase):
         self.assertRegex(tree_text, re.compile(r"LeetCode 236.*保证.*p.*q.*存在"))
         self.assertRegex(tree_text, re.compile(r"p.*q.*有效"))
         self.assertRegex(tree_text, re.compile(r"(?:迁移题|契约设计).{0,80}目标节点不存在"))
+
+    def test_python_backend_series_states_current_concurrency_boundaries(self):
+        containers = (PYTHON_DIR / "01-containers.md").read_text(encoding="utf-8")
+        dataclass = (
+            PYTHON_DIR / "05-typing-dataclass-pydantic.md"
+        ).read_text(encoding="utf-8")
+        asyncio = (PYTHON_DIR / "07-asyncio-blocking.md").read_text(
+            encoding="utf-8"
+        )
+        gil = (PYTHON_DIR / "08-thread-process-gil.md").read_text(encoding="utf-8")
+
+        self.assertNotIn("单个字节码级操作", containers)
+        self.assertRegex(containers, re.compile(r"字节码.{0,50}(?:不是|不等于).{0,24}线程安全"))
+        self.assertRegex(
+            dataclass,
+            re.compile(
+                r"@dataclass\(frozen=True\).*?tags: tuple\[str, \.\.\.\] = \(\)",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(dataclass, re.compile(r"(?:冻结|frozen).{0,56}浅层"))
+        for term in ("TaskGroup", "asyncio.timeout", "取消传播"):
+            with self.subTest(term=term):
+                self.assertIn(term, asyncio)
+        self.assertRegex(gil, re.compile(r"默认.{0,24}GIL.*(?:启用|enabled)"))
+        self.assertRegex(gil, re.compile(r"可选.{0,30}(?:free-threaded|自由线程).*3\.13\+"))
+
+    def test_python_backend_series_has_executable_practice_and_dependency_boundary(self):
+        readme = (PYTHON_DIR / "README.md").read_text(encoding="utf-8")
+        pytest = (PYTHON_DIR / "09-pytest-mock-fixture.md").read_text(
+            encoding="utf-8"
+        )
+        fastapi = (PYTHON_DIR / "10-fastapi-lifecycle-di.md").read_text(
+            encoding="utf-8"
+        )
+        packaging = (PYTHON_DIR / "11-packaging-venv-lock.md").read_text(
+            encoding="utf-8"
+        )
+        backend_index = (REPO_ROOT / "interviews-docs" / "02-后端" / "README.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(
+            "[统一练习协议](../../practice-protocol.md)",
+            readme,
+        )
+        self.assertIn("C01", readme)
+        self.assertIn("C07", readme)
+        self.assertLess(readme.count("| P0 |"), readme.count("| P"))
+        self.assertRegex(
+            backend_index,
+            re.compile(r"\[Python[^\]]*\]\(\.\./05-misc/python/README\.md\)"),
+        )
+        self.assertRegex(packaging, re.compile(r"pip freeze.{0,72}环境快照", re.DOTALL))
+        self.assertRegex(packaging, re.compile(r"pip freeze.{0,96}(?:不是|并非).{0,36}锁", re.DOTALL))
+        for text, required in ((pytest, "pytest -q"), (fastapi, "TestClient")):
+            with self.subTest(required=required):
+                self.assertIn("## 可执行证据", text)
+                self.assertIn(required, text)
 
 
 if __name__ == "__main__":
