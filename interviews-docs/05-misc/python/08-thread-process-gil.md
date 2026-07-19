@@ -8,7 +8,7 @@ Python thread 适合 I/O-bound 并发，process 适合 CPU-bound 并行；在默
 
 GIL 是 CPython 的 Global Interpreter Lock，用来保护解释器内部状态。它不代表 Python 没有并发，也不代表所有操作都慢；它主要限制同一进程内多个线程同时执行 Python bytecode。线程在等待 I/O 时会释放 GIL，因此网络请求、文件 I/O、数据库调用这类 I/O-bound 任务仍可以用 thread 提升吞吐。
 
-版本边界（访问日期：2026-07-19）：可选的 free-threaded CPython 3.13+ 构建仍属实验性，可在没有 GIL 时并行运行线程；它不是默认解释器语义，也不消除业务层的锁、队列和不变量设计。free-threaded 构建还可能因不支持它的扩展在运行时重新启用 GIL，因此部署前要确认实际构建和依赖兼容性。
+版本边界（访问日期：2026-07-19）：默认（普通）CPython 构建仍是 GIL 启用。Python 3.13 的 free-threaded 构建是可选的实验性功能；Python 3.14+ 的 free-threaded Python 已正式支持、不再属于实验功能，但仍是可选构建，不是默认解释器语义。它不消除业务层的锁、队列和不变量设计；不支持它的扩展还可能在运行时重新启用 GIL，因此部署前要确认实际构建和依赖兼容性。
 
 CPU-bound 任务如果主要执行 Python 代码，多线程会互相争抢 GIL，通常应使用 `multiprocessing`、`ProcessPoolExecutor`、外部任务队列，或 NumPy 这类能释放 GIL 的 native extension。
 
@@ -76,4 +76,5 @@ free-threaded 构建再检查 `sys._is_gil_enabled()`，并在报告中写明“
 - [threading](https://docs.python.org/3/library/threading.html)
 - [multiprocessing](https://docs.python.org/3/library/multiprocessing.html)
 - [concurrent.futures](https://docs.python.org/3/library/concurrent.futures.html)
-- [Python 3.13 free-threading](https://docs.python.org/3.13/howto/free-threading-python.html)（访问日期：2026-07-19）
+- [What’s New in Python 3.14: free-threaded Python](https://docs.python.org/3.14/whatsnew/3.14.html)（访问日期：2026-07-19；3.14 起正式支持、仍可选）
+- [Python 3.14 free-threading](https://docs.python.org/3.14/howto/free-threading-python.html)（访问日期：2026-07-19）

@@ -1,5 +1,7 @@
+import io
 import re
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 
@@ -37,6 +39,10 @@ DSA_CHAPTERS = (
     "07_堆栈队列二分.md",
 )
 PYTHON_DIR = REPO_ROOT / "interviews-docs" / "05-misc" / "python"
+
+
+def python_fences(text: str) -> list[str]:
+    return re.findall(r"```python\n(.*?)```", text, re.DOTALL)
 
 
 class LearningMaterialsTest(unittest.TestCase):
@@ -151,19 +157,68 @@ class LearningMaterialsTest(unittest.TestCase):
 
         self.assertNotIn("单个字节码级操作", containers)
         self.assertRegex(containers, re.compile(r"字节码.{0,50}(?:不是|不等于).{0,24}线程安全"))
+        safe_and_unsafe_fences = [
+            fence
+            for fence in python_fences(dataclass)
+            if "class ToolSpec" in fence and "field(default_factory=list)" in fence
+        ]
+        self.assertTrue(safe_and_unsafe_fences, "missing executable shallow-freeze example")
+        safe_and_unsafe = safe_and_unsafe_fences[0]
         self.assertRegex(
-            dataclass,
+            safe_and_unsafe,
+            re.compile(r"@dataclass\(frozen=True\).*?tags: tuple\[str, \.\.\.\] = \(\)", re.DOTALL),
+        )
+        self.assertRegex(
+            safe_and_unsafe,
             re.compile(
-                r"@dataclass\(frozen=True\).*?tags: tuple\[str, \.\.\.\] = \(\)",
+                r"@dataclass\(frozen=True\).*?field\(default_factory=list\).*?\.append\(",
                 re.DOTALL,
             ),
         )
+        namespace = {}
+        exec(safe_and_unsafe, namespace)
+        self.assertEqual(namespace["unsafe"].tags, ["retrieval"])
         self.assertRegex(dataclass, re.compile(r"(?:冻结|frozen).{0,56}浅层"))
-        for term in ("TaskGroup", "asyncio.timeout", "取消传播"):
-            with self.subTest(term=term):
-                self.assertIn(term, asyncio)
+        for construct in (
+            "async with asyncio.timeout",
+            "async with asyncio.TaskGroup",
+            "group.create_task",
+        ):
+            with self.subTest(construct=construct):
+                self.assertIn(construct, asyncio)
+        self.assertRegex(asyncio, re.compile(r"CancelledError.{0,72}(?:传播|重新抛出)", re.DOTALL))
+        structured_examples = [
+            fence
+            for fence in python_fences(asyncio)
+            if "async with asyncio.timeout" in fence
+        ]
+        self.assertTrue(structured_examples, "missing runnable structured-concurrency example")
+        structured_example = structured_examples[0]
+        self.assertIn("finally", structured_example)
+        compile(structured_example, "asyncio-example", "exec")
+        with redirect_stdout(io.StringIO()):
+            exec(structured_example, {})
         self.assertRegex(gil, re.compile(r"默认.{0,24}GIL.*(?:启用|enabled)"))
-        self.assertRegex(gil, re.compile(r"可选.{0,30}(?:free-threaded|自由线程).*3\.13\+"))
+        self.assertRegex(gil, re.compile(r"Python 3\.13.{0,80}实验", re.DOTALL))
+        self.assertRegex(
+            gil,
+            re.compile(r"Python 3\.14\+.{0,120}(?:正式支持|不再.*实验).{0,72}可选", re.DOTALL),
+        )
+        self.assertNotRegex(gil, re.compile(r"3\.13\+.{0,80}实验", re.DOTALL))
+
+    def test_python_foundation_chapters_have_protocol_linked_evidence_tasks(self):
+        expected_artifacts = {
+            "02-reference-copy.md": "copy-evidence.txt",
+            "03-iterator-generator.md": "generator-evidence.txt",
+            "04-decorator-context-manager.md": "resource-evidence.txt",
+            "06-exceptions.md": "exception-evidence.txt",
+        }
+        for filename, artifact in expected_artifacts.items():
+            with self.subTest(filename=filename):
+                text = (PYTHON_DIR / filename).read_text(encoding="utf-8")
+                self.assertIn("[统一练习协议](../../practice-protocol.md)", text)
+                self.assertIn("## 可执行证据", text)
+                self.assertIn(artifact, text)
 
     def test_python_backend_series_has_executable_practice_and_dependency_boundary(self):
         readme = (PYTHON_DIR / "README.md").read_text(encoding="utf-8")
