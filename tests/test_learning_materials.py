@@ -1,5 +1,6 @@
 import io
 import re
+import subprocess
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -487,8 +488,18 @@ class LearningMaterialsTest(unittest.TestCase):
         index = (REPO_ROOT / "best-practice" / "README.md").read_text(encoding="utf-8")
 
         self.assertFalse((REPO_ROOT / "best-practice" / "vibe-coding").exists())
-        self.assertTrue(readme.is_file(), "missing agent-assisted development guide")
-        self.assertTrue(checklist.is_file(), "missing operational checklist")
+        docs = sorted(path.name for path in practice_dir.glob("*.md"))
+        self.assertEqual(docs, ["README.md", "workflow-checklist.md"])
+        for path in (readme, checklist):
+            with self.subTest(path=path):
+                self.assertTrue(path.is_file(), f"missing {path.name}")
+                tracked = subprocess.run(
+                    ["git", "ls-files", "--error-unmatch", str(path.relative_to(REPO_ROOT))],
+                    cwd=REPO_ROOT,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(tracked.returncode, 0, f"untracked doc: {path}")
         self.assertIn(
             "[受控的 Agent 辅助开发](agent-assisted-development/README.md)", index
         )
@@ -507,14 +518,42 @@ class LearningMaterialsTest(unittest.TestCase):
             "https://github.com/ZophiaWong/forge-harness/blob/"
             "9c1b1dbb0566e9053457db50e64cd374848de856/test/tools/toolRuntime.test.ts",
             "https://github.com/ZophiaWong/forge-harness/blob/"
-            "9c1b1dbb0566e9053457db50e64cd374848de856/test/runtime/verification.test.ts",
-            "https://github.com/ZophiaWong/forge-harness/blob/"
             "9c1b1dbb0566e9053457db50e64cd374848de856/test/extensions/childSessions.test.ts",
         ):
             with self.subTest(evidence=evidence):
                 self.assertIn(evidence, text)
-        self.assertRegex(text, re.compile(r"测量候选指标[\s\S]{0,480}任务完成时间"))
-        self.assertRegex(text, re.compile(r"测量候选指标[\s\S]{0,480}返工率"))
+        minimal_loop = (
+            "https://github.com/ZophiaWong/forge-harness/blob/"
+            "9c1b1dbb0566e9053457db50e64cd374848de856/"
+            "test/core/minimalLoop.test.ts#L1632-L1770"
+        )
+        self.assertRegex(
+            text,
+            re.compile(rf"最终回答.{{0,100}}一次恢复.{{0,240}}{re.escape(minimal_loop)}", re.DOTALL),
+        )
+        self.assertRegex(
+            text,
+            re.compile(
+                r"已提议：外部工具以及 MCP 或插件路由.*?c15b.*?"
+                r"c15b-async-child-sessions-parallel-handoff\.md",
+                re.DOTALL,
+            ),
+        )
+        self.assertNotRegex(text, re.compile(r"已计划：.{0,120}(?:MCP|插件路由)", re.DOTALL))
+        self.assertRegex(
+            text,
+            re.compile(r"只有实际完成.*?才可以说.*?按这个流程练习过", re.DOTALL),
+        )
+        self.assertRegex(
+            text,
+            re.compile(r"没有保留.*?可检查.*?证据没有保留", re.DOTALL),
+        )
+        self.assertRegex(text, re.compile(r"没有实践.*?只描述.*?计划", re.DOTALL))
+        metrics = re.search(r"## 指标和个人叙事\n(.*?)(?:\n## |\Z)", readme.read_text(encoding="utf-8"), re.DOTALL)
+        self.assertIsNotNone(metrics, "missing metrics section")
+        self.assertIn("测量候选指标", metrics.group(1))
+        self.assertRegex(metrics.group(1), re.compile(r"方法.*?记录", re.DOTALL))
+        self.assertNotRegex(metrics.group(1), re.compile(r"\d+(?:\.\d+)?\s*(?:%|百分之|倍|分钟|小时)"))
         self.assertIn("范围 → 上下文 → 计划 → 最小 patch → 验证 → review → bad case 回流", text)
 
 
