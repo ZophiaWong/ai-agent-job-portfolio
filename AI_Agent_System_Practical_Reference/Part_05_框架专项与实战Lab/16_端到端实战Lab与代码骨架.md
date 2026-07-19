@@ -110,7 +110,7 @@ class AgentState(TypedDict, total=False):
     execution_status: Literal[
         "not_started", "success", "failed", "cancelled", "unknown"
     ]
-    tool_result: dict
+    tool_result: dict | None
     final_answer: str
     validation_error: str | None
 ```

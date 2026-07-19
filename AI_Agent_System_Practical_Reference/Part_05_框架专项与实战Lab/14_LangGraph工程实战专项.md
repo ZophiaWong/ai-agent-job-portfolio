@@ -98,7 +98,7 @@ class AgentState(TypedDict, total=False):
     decision: Literal["pending", "approved", "rejected"]
     executed: bool | None
     execution_status: Literal["not_started", "success", "failed", "cancelled", "unknown"]
-    tool_result: dict
+    tool_result: dict | None
     validation_error: str | None
 ```
 
