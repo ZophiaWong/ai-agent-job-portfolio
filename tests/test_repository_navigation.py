@@ -6,33 +6,63 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ENTRYPOINTS = [
     REPO_ROOT / "README.md",
+    REPO_ROOT / "interviews-docs" / "README.md",
+    REPO_ROOT / "interviews-docs" / "01-AI" / "README.md",
+    REPO_ROOT / "interviews-docs" / "02-后端" / "README.md",
+    REPO_ROOT / "interviews-docs" / "03-DS_AL" / "README.md",
     REPO_ROOT / "projects" / "README.md",
     REPO_ROOT / "interviews-docs" / "04-career" / "README.md",
+    REPO_ROOT / "best-practice" / "README.md",
+    REPO_ROOT
+    / "AI_Agent_System_Practical_Reference"
+    / "00_README_学习路线与资料使用说明.md",
 ]
 PROJECT_EVIDENCE_PAGES = [
     REPO_ROOT / "projects" / "meter-desk" / "README.md",
     REPO_ROOT / "projects" / "forge-harness" / "README.md",
 ]
-LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
+LINK_RE = re.compile(r"!?(?:\[[^\]]*\])\(([^)]+)\)")
+PUBLIC_MARKDOWN_ROOTS = [
+    REPO_ROOT / "README.md",
+    REPO_ROOT / "AI_Agent_System_Practical_Reference",
+    REPO_ROOT / "interviews-docs",
+    REPO_ROOT / "learning-materials",
+    REPO_ROOT / "best-practice",
+    REPO_ROOT / "projects",
+    REPO_ROOT / ".codex" / "skills" / "anki-card-maker" / "references",
+]
 
 
 class RepositoryNavigationTest(unittest.TestCase):
-    def test_public_entrypoints_exist_and_local_links_resolve(self):
+    def test_public_entrypoints_exist(self):
         for entrypoint in ENTRYPOINTS:
             with self.subTest(entrypoint=entrypoint.relative_to(REPO_ROOT)):
                 self.assertTrue(entrypoint.is_file(), f"missing {entrypoint}")
-                text = entrypoint.read_text(encoding="utf-8")
-                for target in LINK_RE.findall(text):
-                    if target.startswith(("http://", "https://", "#")):
-                        continue
-                    clean_target = target.split("#", 1)[0]
-                    if not clean_target:
-                        continue
-                    resolved = (entrypoint.parent / clean_target).resolve()
-                    self.assertTrue(
-                        resolved.exists(),
-                        f"broken link in {entrypoint}: {target}",
-                    )
+
+    def test_public_markdown_local_links_and_images_resolve(self):
+        public_pages = []
+        for root in PUBLIC_MARKDOWN_ROOTS:
+            if root.is_file():
+                public_pages.append(root)
+            else:
+                public_pages.extend(root.rglob("*.md"))
+
+        for page in public_pages:
+            text = page.read_text(encoding="utf-8")
+            for target in LINK_RE.findall(text):
+                target = target.strip().strip("<>")
+                if target.startswith(("http://", "https://", "mailto:", "#")):
+                    continue
+                clean_target = target.split("#", 1)[0].split(" ", 1)[0]
+                if not clean_target:
+                    continue
+                resolved = (
+                    REPO_ROOT / clean_target.lstrip("/")
+                    if clean_target.startswith("/")
+                    else page.parent / clean_target
+                ).resolve()
+                with self.subTest(page=page.relative_to(REPO_ROOT), target=target):
+                    self.assertTrue(resolved.exists(), f"broken link in {page}: {target}")
 
     def test_competency_matrix_covers_every_public_competency_id(self):
         skill_root = REPO_ROOT / ".codex" / "skills" / "interview-prep-coach"
