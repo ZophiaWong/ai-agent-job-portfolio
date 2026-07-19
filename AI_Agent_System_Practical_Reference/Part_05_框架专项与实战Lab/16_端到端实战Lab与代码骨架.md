@@ -1,609 +1,297 @@
-# 16_端到端实战Lab与代码骨架
+# 16 端到端实战 Lab 与代码骨架
 
-## 0. 章节元信息
+## 0. 事实边界
 
-- 岗位重要性：P0/P1
-- 面试常见度：高
-- 工程实战价值：高
-- 推荐学习深度：精读并动手实现
+- 主要能力：C08.02
+- 关联能力：C03.03、C04.02、C05、C06、C07、C09
+- 练习协议：[统一练习协议](../../interviews-docs/practice-protocol.md)
 
-适合岗位：
+这是“企业知识库 + 工具调用 + 人工审批”的设计草图。仓库没有与本章对应的可运行源码或集成测试，因此不能把代码片段称为已实现项目，也不能直接写进简历。片段用于检查模块边界，省略了依赖注入、数据库事务和框架版本适配。
 
-- AI Agent 应用工程师
-- Python AI 后端工程师
-- LangGraph Agent 工程师
-- RAG 工程师
+## 1. 冷启动交付
 
-对应岗位能力：
+先不看参考骨架，用 45 分钟写 `agent-lab-cold-design.md`：
 
-- 端到端项目
-- 代码骨架
-- FastAPI
-- LangGraph
-- RAG
-- 工具调用
-- 评测
-- 安全
-- 部署
+1. 画出 RAG 问答、只读工具和高风险写工具三条链路。
+2. 定义 State，明确 proposed、approved/rejected、executed 和最终结果。
+3. 写出 pause/resume 的调用协议、稳定 thread identity 和动作级幂等键。
+4. 列出至少六个失败场景，逐一标注 retry、reject、cancel、fail 或人工处理。
+5. 给出你会怎样用集成测试证明“暂停时未执行，恢复后至多执行一次”。
 
-依赖章节：
+阅读参考代码、补齐 TODO 或勾选清单不算独立证据。要升级为项目证据，至少需要可运行源码、测试输出、一次受控 trace 和实际贡献说明。
 
-- 01 到 15
+### 迁移题
 
-相关章节：
+改变约束：审批人允许修改动作参数，服务可能在 `interrupt()` 后重启，并且工具调用成功后响应可能丢失。更新设计，说明重新校验、持久化 checkpointer、幂等结果查询各放在哪里。
 
-- 11 项目设计模板
-- 12 高频面试题
+### 延迟复测
 
+两天后重做核心状态图，保存 `agent-lab-delayed.md`。对照第一次产物，检查是否仍把“approved”误写成“executed”。
 
-## 1. Lab 目标
+<!-- Lab 参考分隔线：完成冷答后再继续 -->
 
-本 Lab 设计一个可写进简历和用于面试讲解的端到端项目：
+## 2. 目标和非目标
 
-```text
-企业知识库 + 工具调用 + 人工审批的 LangGraph Agent
-```
+设计覆盖四类请求：
 
-项目目标：
+- 内部制度问答：先做权限过滤，再返回带引用的答案。
+- 订单状态查询：鉴权后调用只读 API。
+- 创建工单或发送通知：形成动作提案，暂停等待确认，恢复后执行。
+- 证据不足或工具结果不确定：补充检索、失败退出或转人工。
 
-```text
-用户提出问题或任务；
-系统判断是否需要检索知识库；
-必要时调用业务工具；
-高风险动作进入人工审批；
-最终返回带引用的答案或执行结果；
-全链路记录 trace、评测和审计。
-```
+它不是某个现有系统的说明书，也不暗示 MeterDesk、Forge Harness 或本仓库已经采用这些接口。
 
-这不是完整源码，而是项目骨架和实现指南。后续你可以基于这个文件逐步实现真实项目。
-
-## 2. 项目功能范围
-
-### 2.1 用户场景
-
-```text
-场景 1：员工询问内部制度
-  Agent 检索知识库并给出带引用答案。
-
-场景 2：员工询问某个订单或工单状态
-  Agent 先判断权限，再调用只读业务 API。
-
-场景 3：员工要求发送通知或创建工单
-  Agent 生成计划和参数，进入人工确认后执行。
-
-场景 4：答案低置信度
-  Agent 补充检索或转人工。
-```
-
-### 2.2 系统能力
-
-```text
-RAG 问答；
-工具调用；
-LangGraph Workflow；
-State 管理；
-HITL；
-FastAPI 服务；
-SSE 流式事件；
-Redis 缓存；
-PostgreSQL 任务和审计；
-向量库；
-评测脚本；
-Bad Case 回流。
-```
-
-## 3. 总体架构
+## 3. 架构边界
 
 ```text
 Client
-  ↓
-FastAPI
-  ├── /agent/tasks
-  ├── /agent/tasks/{task_id}
-  ├── /agent/tasks/{task_id}/approve
-  └── /feedback
-  ↓
-Agent Service
-  ↓
-LangGraph
-  ├── understand_node
-  ├── router_node
-  ├── query_rewrite_node
-  ├── retrieve_node
-  ├── rerank_node
-  ├── context_builder_node
-  ├── tool_select_node
-  ├── tool_execute_node
-  ├── human_review_node
-  ├── answer_node
-  └── validator_node
-  ↓
-Storage
-  ├── PostgreSQL：任务、审计、反馈、评测
-  ├── Redis：缓存、锁、进度
-  ├── Vector DB：知识 chunk
-  └── Object Storage：原始文档
-  ↓
-Observability
-  ├── logs
-  ├── metrics
-  └── traces
+  → FastAPI：身份、请求/恢复接口、SSE
+  → Agent Service：LangGraph + durable checkpointer
+      ├── RAG：ingest / retrieve / rerank / cite
+      ├── Tool Gateway：schema / authz / idempotency / outcome verification
+      └── HITL：interrupt / resume / audit
+  → Storage
+      ├── PostgreSQL：业务任务、动作、审批、幂等结果、审计
+      ├── Vector Store：有权限标签的 chunk
+      └── Object Storage：原始文档
+  → Observability：logs / metrics / traces
 ```
 
-## 4. 推荐目录结构
+Checkpointer 保存图的 checkpoint；业务数据库保存审批身份、冻结参数、幂等记录和工具结果。不要假设 checkpoint 取代业务事务。
+
+## 4. 目录草图
 
 ```text
-agent_job_project/
+agent_lab/
   app/
-    main.py
-    config.py
-
-    api/
-      routes_agent.py
-      routes_approval.py
-      routes_feedback.py
-
-    schemas/
-      request.py
-      response.py
-      state.py
-      tools.py
-
-    agents/
-      graph.py
-      nodes.py
-      routing.py
-      prompts.py
-
-    tools/
-      base.py
-      rag.py
-      business_api.py
-      notification.py
-
-    rag/
-      loaders.py
-      chunking.py
-      embeddings.py
-      retriever.py
-      reranker.py
-      indexing.py
-
-    services/
-      llm_gateway.py
-      task_service.py
-      approval_service.py
-      audit_service.py
-      eval_service.py
-
-    storage/
-      postgres.py
-      redis.py
-      vector_store.py
-
-    observability/
-      logging.py
-      tracing.py
-      metrics.py
-
-    security/
-      auth.py
-      permissions.py
-      guardrails.py
-
+    api/tasks.py
+    agents/graph.py
+    agents/nodes.py
+    schemas/state.py
+    services/approval.py
+    services/tool_gateway.py
+    rag/retriever.py
+    security/authorization.py
+    storage/checkpoints.py
+    storage/postgres.py
+  tests/
+    test_hitl_resume.py
+    test_tool_idempotency.py
+    test_rag_permissions.py
   evals/
-    datasets/
-      rag_eval.jsonl
-      tool_eval.jsonl
-      safety_eval.jsonl
-    run_eval.py
-
-  scripts/
-    ingest_docs.py
-    rebuild_index.py
-
-  docker-compose.yml
-  README.md
+    rag_cases.jsonl
+    action_cases.jsonl
 ```
 
-## 5. State 设计
+这些文件目前不存在。真正实现后应以仓库路径和测试记录替代这段草图。
+
+## 5. State：批准不是执行
 
 ```python
-from typing import TypedDict, Literal, List, Dict, Optional
+from typing import Literal, TypedDict
+
+class Action(TypedDict):
+    kind: Literal["create_ticket", "send_notification"]
+    tenant_id: str
+    business_object_id: str
+    arguments: dict
 
 class AgentState(TypedDict, total=False):
-    task_id: str
-    trace_id: str
-    user_id: str
-    user_goal: str
-    task_type: Literal["qa", "tool", "approval", "unknown"]
-    risk_level: Literal["low", "medium", "high"]
-    step_count: int
-    retry_count: int
-
-    rewritten_query: Optional[str]
-    retrieved_docs: List[Dict]
-    reranked_docs: List[Dict]
-    context: str
-
-    selected_tool: Optional[str]
-    tool_args: Dict
-    tool_result: Dict
-
-    approval_required: bool
-    approval_status: Literal["pending", "approved", "rejected", "not_required"]
-
-    errors: List[Dict]
-    final_answer: Optional[str]
-    status: Literal["running", "waiting_approval", "success", "failed", "fallback"]
-```
-
-设计说明：
-
-```text
-task_id / trace_id 用于全链路追踪；
-step_count / retry_count 用于循环控制；
-retrieved_docs 保存文档引用，不保存过长全文；
-approval_status 控制 HITL；
-status 表示任务总体状态。
-```
-
-## 6. LangGraph 节点设计
-
-### 6.1 understand_node
-
-```python
-def understand_node(state: AgentState) -> AgentState:
-    # 识别任务类型、风险等级、是否需要检索或工具
-    # 输出 task_type, risk_level
-    return {
-        "task_type": "qa",
-        "risk_level": "low",
-        "step_count": state.get("step_count", 0) + 1,
-    }
-```
-
-### 6.2 route_after_understanding
-
-```python
-def route_after_understanding(state: AgentState) -> str:
-    if state["risk_level"] == "high":
-        return "human_review"
-    if state["task_type"] == "qa":
-        return "query_rewrite"
-    if state["task_type"] == "tool":
-        return "tool_select"
-    return "answer"
-```
-
-### 6.3 RAG 节点
-
-```python
-async def query_rewrite_node(state: AgentState) -> AgentState:
-    # 调用 LLM 改写 query
-    return {"rewritten_query": state["user_goal"]}
-
-async def retrieve_node(state: AgentState) -> AgentState:
-    # 向量 + BM25 检索
-    docs = await retriever.search(state["rewritten_query"], user_id=state["user_id"])
-    return {"retrieved_docs": docs}
-
-async def rerank_node(state: AgentState) -> AgentState:
-    docs = await reranker.rerank(state["rewritten_query"], state["retrieved_docs"])
-    return {"reranked_docs": docs[:5]}
-
-def context_builder_node(state: AgentState) -> AgentState:
-    context = build_context(state["reranked_docs"])
-    return {"context": context}
-```
-
-### 6.4 工具节点
-
-```python
-async def tool_execute_node(state: AgentState) -> AgentState:
-    tool_name = state["selected_tool"]
-    args = state["tool_args"]
-
-    result = await tool_registry.execute(
-        tool_name=tool_name,
-        args=args,
-        user_id=state["user_id"],
-        trace_id=state["trace_id"],
-        idempotency_key=f"{state['task_id']}:{tool_name}"
-    )
-
-    return {"tool_result": result}
-```
-
-工具 wrapper 必须包含：
-
-```text
-schema 校验；
-权限校验；
-风险判断；
-幂等；
-超时；
-重试；
-错误码；
-审计日志。
-```
-
-### 6.5 Human Review 节点
-
-```python
-def human_review_node(state: AgentState) -> AgentState:
-    # 写入审批表，暂停执行
-    create_approval_request(
-        task_id=state["task_id"],
-        tool_name=state.get("selected_tool"),
-        args=state.get("tool_args"),
-        risk_level=state["risk_level"],
-    )
-    return {
-        "approval_required": True,
-        "approval_status": "pending",
-        "status": "waiting_approval",
-    }
-```
-
-### 6.6 Answer 节点
-
-```python
-async def answer_node(state: AgentState) -> AgentState:
-    # 基于 context、tool_result、user_goal 生成最终答案
-    answer = await llm.generate_answer(
-        user_goal=state["user_goal"],
-        context=state.get("context", ""),
-        tool_result=state.get("tool_result", {}),
-    )
-    return {"final_answer": answer, "status": "success"}
-```
-
-## 7. Graph 结构
-
-```text
-START
-  ↓
-understand_node
-  ↓
-route_after_understanding
-  ├── query_rewrite_node
-  │     ↓
-  │   retrieve_node
-  │     ↓
-  │   rerank_node
-  │     ↓
-  │   context_builder_node
-  │     ↓
-  │   answer_node
-  │
-  ├── tool_select_node
-  │     ↓
-  │   risk_check_node
-  │     ├── human_review_node
-  │     └── tool_execute_node
-  │           ↓
-  │         answer_node
-  │
-  └── answer_node
-        ↓
-      validator_node
-        ├── pass → END
-        ├── retry → query_rewrite_node
-        └── fail → fallback_node
-```
-
-## 8. FastAPI 接口设计
-
-```python
-from fastapi import APIRouter
-from pydantic import BaseModel
-
-router = APIRouter()
-
-class AgentRequest(BaseModel):
+    thread_business_id: str
     user_id: str
     query: str
 
-@router.post("/agent/tasks")
-async def create_agent_task(req: AgentRequest):
-    task_id = await task_service.create_task(req.user_id, req.query)
-    # 可同步调用，也可投递后台任务
-    return {"task_id": task_id}
-
-@router.get("/agent/tasks/{task_id}")
-async def get_task(task_id: str):
-    return await task_service.get_task(task_id)
-
-@router.post("/agent/tasks/{task_id}/approve")
-async def approve_task(task_id: str, approved: bool):
-    return await approval_service.approve(task_id, approved)
+    retrieved_refs: list[dict]
+    proposed: Action
+    approved: Action
+    decision: Literal["pending", "approved", "rejected"]
+    executed: bool
+    execution_status: Literal[
+        "not_started", "success", "failed", "cancelled", "unknown"
+    ]
+    tool_result: dict
+    final_answer: str
 ```
 
-SSE 事件可以设计为：
+`proposed` 是模型或规则产生的候选动作。`approved` 是用户确认、可能编辑后又通过校验的参数快照。`executed` 只有在副作用发生且结果可验证时才为 true。审批不等于执行。
 
-```text
-node_start
-node_end
-token
-tool_start
-tool_end
-human_required
-final
-error
-```
-
-## 9. 数据库表设计
-
-### 9.1 tasks
-
-```text
-task_id
-user_id
-status
-task_type
-risk_level
-created_at
-updated_at
-final_answer
-trace_id
-```
-
-### 9.2 tool_calls
-
-```text
-id
-task_id
-tool_name
-arguments_summary
-status
-retry_count
-latency_ms
-error_type
-created_at
-```
-
-### 9.3 approvals
-
-```text
-approval_id
-task_id
-tool_name
-risk_level
-arguments_snapshot
-status
-approver_id
-approved_at
-```
-
-### 9.4 audit_logs
-
-```text
-audit_id
-task_id
-user_id
-action
-resource_id
-result
-trace_id
-created_at
-```
-
-### 9.5 feedback
-
-```text
-feedback_id
-task_id
-rating
-comment
-failure_type
-created_at
-```
-
-## 10. 评测脚本思路
+## 6. RAG 分支
 
 ```python
-def run_rag_eval(dataset):
-    for case in dataset:
-        result = agent.invoke({"user_goal": case["query"]})
-        check_answer(result["final_answer"], case["expected_answer"])
-        check_citations(result["retrieved_docs"], case["gold_doc_ids"])
+async def retrieve_node(state: AgentState) -> dict:
+    refs = await retriever.search(
+        query=state["query"],
+        principal=state["user_id"],
+    )
+    return {"retrieved_refs": refs}
 
-def run_tool_eval(dataset):
-    for case in dataset:
-        result = agent.invoke({"user_goal": case["task"]})
-        assert result["selected_tool"] == case["expected_tool"]
-        assert validate_args(result["tool_args"], case["expected_args"])
+async def answer_node(state: AgentState) -> dict:
+    answer = await llm.answer(state["query"], refs=state.get("retrieved_refs", []))
+    verified = citation_validator.check(answer, state.get("retrieved_refs", []))
+    if not verified.ok:
+        return {"execution_status": "failed", "final_answer": verified.safe_message}
+    return {"final_answer": answer}
 ```
 
-评测维度：
+检索时做数据权限过滤，生成后检查引用。`doc_id`、`chunk_id`、版本和 permission scope 要能进入 trace；单纯把长文本放进 prompt 不足以诊断坏案例。
+
+## 7. HITL：真正暂停并恢复
+
+### Checkpointer 和稳定 thread identity
+
+```python
+from langgraph.checkpoint.memory import InMemorySaver
+
+# 仅供本地演示；生产要换成可持久化的 checkpointer。
+graph = builder.compile(checkpointer=InMemorySaver())
+config = {"configurable": {"thread_id": "tenant-7:action-request-42"}}
+```
+
+`InMemorySaver` 不能支持进程重启后的恢复。生产部署要选择持久化实现，并让暂停和恢复使用同一 `thread_id`。thread identity 用来找到 checkpoint，不代表当前调用者有审批权。
+
+### 审批节点
+
+```python
+from langgraph.types import interrupt
+
+def approval_node(state: AgentState) -> dict:
+    review = interrupt(
+        {
+            "kind": "review_action",
+            "proposed": state["proposed"],
+            "choices": ["approve", "edit", "reject"],
+        }
+    )
+
+    if review["decision"] == "reject":
+        return {
+            "decision": "rejected",
+            "executed": False,
+            "execution_status": "cancelled",
+        }
+
+    candidate = review.get("action", state["proposed"])
+    approved = validate_action(candidate, allowlist=ACTION_ALLOWLIST, schema=Action)
+    return {"approved": approved, "decision": "approved", "executed": False}
+```
+
+`interrupt()` 会保存 checkpoint 并暂停；恢复后节点从头重新执行。interrupt() 前不要放不可重复副作用；无法移走时必须让副作用幂等，并保存可查询的执行结果。payload 要能 JSON 序列化。
+
+审批人编辑后的 action 重新走 allowlist 和 schema。校验在任何副作用之前完成，执行节点再防御性校验一次。
+
+### 恢复接口的核心调用
+
+```python
+from langgraph.types import Command
+
+config = {"configurable": {"thread_id": "tenant-7:action-request-42"}}
+
+paused = graph.invoke({"proposed": action, "decision": "pending"}, config=config)
+
+resumed = graph.invoke(
+    Command(resume={"decision": "approve", "action": edited_action}),
+    config=config,
+)
+```
+
+实际 API 还要验证审批人、审批是否过期、approval id 与 thread 的绑定，并防止重复 resume。只在数据库里把状态改成 approved，不会让图自动继续。
+
+## 8. 动作级幂等与结果验证
+
+```python
+import hashlib
+import json
+
+def action_key(action: Action) -> str:
+    normalized_arguments = json.dumps(
+        action["arguments"], sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
+    stable_business_identity = (
+        f"{action['tenant_id']}:{action['kind']}:{action['business_object_id']}"
+    )
+    digest = hashlib.sha256(normalized_arguments.encode("utf-8")).hexdigest()
+    return f"{stable_business_identity}:{digest}"
+
+async def execute_action_node(state: AgentState) -> dict:
+    if state.get("decision") != "approved":
+        return {"executed": False, "execution_status": "cancelled"}
+
+    action = validate_action(state["approved"], allowlist=ACTION_ALLOWLIST, schema=Action)
+    result = await tool_gateway.execute(action, idempotency_key=action_key(action))
+    if not tool_gateway.verify_outcome(action, result):
+        return {
+            "executed": False,
+            "execution_status": "failed",
+            "tool_result": result,
+        }
+    return {"executed": True, "execution_status": "success", "tool_result": result}
+```
+
+键由稳定业务标识和规范化动作参数生成，并由数据库唯一约束保护。`task_id:tool_name` 不足，会让同一任务里的不同动作碰撞；仅使用随机 request id 又无法识别业务重放。
+
+只有工具结果经过验证才能记录 `success`。如果请求超时而服务端结果未知，应先查幂等记录或业务对象，不要直接重试，也不要写 success。拒绝、取消和失败各自保留终态。
+
+## 9. 图结构
 
 ```text
-RAG：
-  gold doc 是否召回，引用是否支持答案。
-
-Tool：
-  工具选择是否正确，参数是否正确，是否遵守权限。
-
-Workflow：
-  是否完成任务，步骤数是否超限，是否错误转人工。
-
-Safety：
-  是否阻止越权和高风险动作。
+START → classify
+  ├── qa → retrieve → answer → citation_check → END
+  ├── readonly_tool → authorize → execute_read → verify → answer → END
+  └── write_tool → propose → approval_node
+                              ├── rejected → END(cancelled)
+                              └── approved → execute_action_node
+                                                ├── verified → END(success)
+                                                └── unknown/failed → END(failed)
 ```
 
-## 11. 部署与运行
+没有一个“human_review_node 返回 pending 后继续往下走”的假暂停节点。图只会在 `interrupt()` 处停下，由 `Command(resume=...)` 恢复。
+
+## 10. 接口契约
 
 ```text
-本地开发：
-  FastAPI + PostgreSQL + Redis + Vector DB
+POST /agent/tasks
+  创建业务请求，生成稳定 thread 映射，首次 invoke。
 
-索引任务：
-  scripts/ingest_docs.py
-  scripts/rebuild_index.py
+GET /agent/tasks/{task_id}
+  返回业务状态；不暴露 checkpoint 或敏感参数。
 
-服务运行：
-  uvicorn app.main:app --reload
+POST /agent/approvals/{approval_id}/resume
+  鉴权、检查过期与重复提交，加载同一 thread_id，调用 Command(resume=...).
 
-后台任务：
-  celery -A app.worker worker
-
-生产部署：
-  Docker Compose / Kubernetes
-  环境变量管理模型 key 和数据库连接
-  日志、指标、trace 接入观测系统
+GET /agent/tasks/{task_id}/events
+  返回经过权限和脱敏处理的状态事件。
 ```
 
-## 12. 降级策略
+审批接口接收的是 approval id，不允许调用者直接指定任意 thread。服务端从受控记录解析 thread identity。
+
+## 11. 最小验收测试
+
+真正实现时，至少保留这些可检查结果：
+
+1. 首次调用命中 interrupt，写工具调用计数仍为 0。
+2. 使用同一 thread_id 批准后，工具调用一次，结果验证通过才进入 success。
+3. 重复 resume 或模拟超时重试，业务对象仍只创建一次。
+4. 编辑参数超出 allowlist/schema 时，工具不执行。
+5. reject、cancel、failed 和 success 的审计事件不同。
+6. 换 thread_id 不能恢复原 checkpoint，越权用户也不能 resume。
+
+只做单元测试 mock 仍不足以证明外部副作用安全。应再做带持久化 checkpointer、数据库唯一约束和假的确定性工具服务的集成测试。
+
+## 12. 评测和可观测性
+
+RAG 评测拆成检索、引用和回答；工具评测拆成选择、参数、授权、执行结果；Workflow 再看任务完成率、错误分支和人工升级。trace 至少关联 thread、checkpoint、action、approval 和 tool outcome，但日志不保存凭证或完整敏感正文。
+
+## 13. 如何转成真实项目证据
+
+完成源码和测试后，再按以下结构记录：
 
 ```text
-模型不可用：
-  切备用模型或返回任务延迟提示。
-
-向量库不可用：
-  降级 BM25 或返回无法检索说明。
-
-Rerank 不可用：
-  使用初召回排序。
-
-工具不可用：
-  返回工具暂不可用，并给人工处理建议。
-
-高风险审批超时：
-  不执行动作，保持 pending 或自动取消。
-
-低置信度答案：
-  明确说明不确定性，展示引用，建议转人工。
+需求和约束
+→ 本人实现的路径与 commit
+→ 测试命令及输出
+→ 一次暂停/恢复 trace
+→ 重复提交、拒绝和工具失败的结果
+→ 尚未实现的部分
 ```
 
-## 13. 简历表达模板
-
-```text
-项目：企业知识库与工具调用 Agent
-
-基于 FastAPI + LangGraph 设计并实现多步骤 Agent Workflow，支持知识库 RAG、工具调用、人工审批和任务状态追踪。离线侧完成文档解析、切块、Embedding 和向量索引；在线侧通过 Query Rewrite、Hybrid Search、Rerank 和引用校验提升答案准确性。工具调用层引入 schema 校验、权限检查、幂等、重试和审计，高风险动作通过 HITL 审批。系统采集节点级 Trace、工具耗时、召回结果和用户反馈，支持 Bad Case 回流和离线评测。
-```
-
-## 14. 面试讲解顺序
-
-```text
-1. 业务目标：解决什么问题。
-2. 架构：FastAPI + LangGraph + RAG + Tool + Storage。
-3. 核心难点：RAG 质量、工具安全、状态恢复。
-4. 方案：分层设计、状态机、评测、HITL。
-5. 指标：召回、答案、工具、成功率、延迟、成本。
-6. 风险：越权、误调用、循环、幻觉。
-7. 迭代：Bad Case 回流。
-```
-
-## 15. 本章 TODO Checklist
-
-- [ ] 能按该骨架创建项目目录。
-- [ ] 能定义 AgentState。
-- [ ] 能实现至少 5 个 LangGraph 节点。
-- [ ] 能实现一个 RAG 检索工具。
-- [ ] 能实现一个只读业务工具。
-- [ ] 能实现 HITL 审批表。
-- [ ] 能实现节点级日志。
-- [ ] 能写一个 RAG eval 脚本。
-- [ ] 能把项目写进简历并口述 5 分钟。
+简历只能写已经有证据的内容。“设计了 HITL 状态机”和“上线了可恢复审批系统”是两种不同主张。

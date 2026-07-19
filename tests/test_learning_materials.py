@@ -39,6 +39,22 @@ EVIDENCE_ROUTE = (
     / "Part_04_项目与面试表达"
     / "13_总复习Checklist与学习计划.md"
 )
+MCP_CHAPTER = (
+    REFERENCE_ROOT
+    / "Part_01_Agent核心原理"
+    / "03_工具调用_FunctionCalling_MCP_与行动能力.md"
+)
+LANGGRAPH_CHAPTER = (
+    REFERENCE_ROOT
+    / "Part_05_框架专项与实战Lab"
+    / "14_LangGraph工程实战专项.md"
+)
+END_TO_END_LAB = (
+    REFERENCE_ROOT
+    / "Part_05_框架专项与实战Lab"
+    / "16_端到端实战Lab与代码骨架.md"
+)
+REFERENCE_SOURCES = REFERENCE_ROOT / "references_参考来源.md"
 PLACEHOLDER_INDEXES = [
     REPO_ROOT / "interviews-docs" / "01-AI" / "README.md",
     REPO_ROOT / "interviews-docs" / "02-后端" / "README.md",
@@ -905,6 +921,129 @@ class LearningMaterialsTest(unittest.TestCase):
         self.assertIn("[LLM 失败边界](llm-failure-boundaries.md)", ai_index)
         self.assertIn("[Python 调试](python-debugging.md)", backend_index)
         self.assertIn("[SQL 与 PostgreSQL](sql-postgresql.md)", backend_index)
+
+    def test_mcp_chapter_uses_stable_lifecycle_and_security_boundaries(self):
+        text = MCP_CHAPTER.read_text(encoding="utf-8")
+        marker = "<!-- MCP 参考分隔线：完成冷答后再继续 -->"
+
+        self.assertIn("主要能力：C04.03", text)
+        self.assertIn(marker, text)
+        cold_zone, reference_zone = text.split(marker, maxsplit=1)
+        self.assertIn("mcp-boundary-design.md", cold_zone)
+        self.assertRegex(cold_zone, re.compile(r"冷启动|冷答"))
+        self.assertRegex(cold_zone, re.compile(r"改变约束|迁移题"))
+        self.assertIn("延迟复测", cold_zone)
+        self.assertRegex(
+            cold_zone,
+            re.compile(r"(?:阅读|复制).{0,50}不(?:算|是).{0,30}(?:独立)?证据", re.DOTALL),
+        )
+
+        roles = reference_zone.split("### MCP 的分层", maxsplit=1)[0]
+        for role in ("Host", "Client", "Server"):
+            self.assertIn(role, roles)
+        self.assertRegex(
+            roles,
+            re.compile(r"每个.*MCP Server.{0,80}(?:一个|对应).*MCP Client", re.DOTALL),
+        )
+
+        layers, lifecycle_and_after = reference_zone.split("### MCP 生命周期", maxsplit=1)
+        self.assertIn("JSON-RPC 2.0", layers)
+        self.assertRegex(layers, re.compile(r"数据层.{0,120}传输层", re.DOTALL))
+        lifecycle = lifecycle_and_after.split("### 标准传输", maxsplit=1)[0]
+        for token in (
+            "initialize",
+            "protocolVersion",
+            "capabilities",
+            "notifications/initialized",
+            "协商成功的能力",
+            "关闭传输",
+        ):
+            with self.subTest(lifecycle_token=token):
+                self.assertIn(token, lifecycle)
+
+        transports = lifecycle_and_after.split("### 标准传输", maxsplit=1)[1].split(
+            "### Server primitives", maxsplit=1
+        )[0]
+        self.assertIn("stdio", transports)
+        self.assertIn("Streamable HTTP", transports)
+        self.assertRegex(transports, re.compile(r"HTTP\+SSE.{0,100}(?:旧|取代|替代)", re.DOTALL))
+        self.assertNotRegex(transports, re.compile(r"当前.{0,24}标准.{0,24}HTTP\+SSE"))
+
+        primitives = lifecycle_and_after.split("### Server primitives", maxsplit=1)[1].split(
+            "### 信任与授权", maxsplit=1
+        )[0]
+        self.assertRegex(primitives, re.compile(r"Tools.{0,100}模型控制", re.DOTALL))
+        self.assertRegex(primitives, re.compile(r"Resources.{0,100}应用控制", re.DOTALL))
+        self.assertRegex(primitives, re.compile(r"Prompts.{0,100}用户控制", re.DOTALL))
+
+        security = lifecycle_and_after.split("### 信任与授权", maxsplit=1)[1]
+        for boundary in ("不可信输入", "最小权限", "URI", "输入校验", "用户同意"):
+            with self.subTest(security_boundary=boundary):
+                self.assertIn(boundary, security)
+        self.assertRegex(security, re.compile(r"HTTP.{0,120}授权", re.DOTALL))
+        self.assertRegex(security, re.compile(r"stdio.{0,120}环境", re.IGNORECASE | re.DOTALL))
+        self.assertRegex(security, re.compile(r"不得.{0,32}token passthrough", re.IGNORECASE))
+        self.assertRegex(reference_zone, re.compile(r"设计示例.{0,100}未.*仓库.*执行", re.DOTALL))
+
+    def test_langgraph_hitl_pattern_has_pause_resume_and_execution_truth(self):
+        chapter = LANGGRAPH_CHAPTER.read_text(encoding="utf-8")
+        lab = END_TO_END_LAB.read_text(encoding="utf-8")
+
+        for path, text in ((LANGGRAPH_CHAPTER, chapter), (END_TO_END_LAB, lab)):
+            with self.subTest(path=path.name):
+                self.assertRegex(text, re.compile(r"主要能力：C(?:03\.03|08\.02)"))
+                self.assertRegex(text, re.compile(r"冷启动|冷答"))
+                self.assertRegex(text, re.compile(r"`[^`]+\.md`"))
+                self.assertRegex(text, re.compile(r"改变约束|迁移题"))
+                self.assertIn("延迟复测", text)
+                self.assertRegex(text, re.compile(r"compile\(checkpointer="))
+                self.assertIn('config = {"configurable": {"thread_id":', text)
+                self.assertIn("interrupt(", text)
+                self.assertIn("Command(resume=", text)
+                self.assertRegex(text, re.compile(r"同一.{0,30}thread_id", re.DOTALL))
+                self.assertRegex(text, re.compile(r"节点.{0,30}(?:重新|从头).{0,30}执行", re.DOTALL))
+                self.assertRegex(text, re.compile(r"interrupt\(\).{0,100}副作用.{0,100}幂等", re.DOTALL))
+                for state in ("proposed", "approved", "rejected", "executed"):
+                    self.assertIn(state, text)
+                self.assertRegex(text, re.compile(r"allowlist.{0,80}schema", re.IGNORECASE | re.DOTALL))
+                self.assertRegex(text, re.compile(r"校验.{0,100}副作用", re.DOTALL))
+                self.assertRegex(text, re.compile(r"工具结果.{0,100}验证.{0,100}success", re.DOTALL))
+                self.assertRegex(
+                    text,
+                    re.compile(r"业务标识.{0,100}规范化.{0,100}(?:参数|动作)", re.DOTALL),
+                )
+                self.assertRegex(text, re.compile(r"task_id:tool_name.{0,100}(?:不足|冲突)", re.DOTALL))
+                self.assertNotIn("f\"{state['task_id']}:{tool_name}\"", text)
+
+        self.assertRegex(chapter, re.compile(r"InMemorySaver.{0,100}(?:演示|demo)", re.IGNORECASE | re.DOTALL))
+        self.assertRegex(chapter, re.compile(r"生产.{0,100}持久化|持久化.{0,100}生产", re.DOTALL))
+        self.assertRegex(
+            lab,
+            re.compile(r"设计草图.{0,100}(?:没有|未).{0,80}(?:仓库源码|集成测试)", re.DOTALL),
+        )
+        self.assertNotRegex(lab, re.compile(r"(?:本项目|本仓库).{0,80}(?:已经|已)(?:实现|验证)"))
+        self.assertRegex(lab, re.compile(r"审批.{0,36}不等于.{0,36}执行", re.DOTALL))
+
+    def test_mcp_and_langgraph_sources_record_stable_primary_docs(self):
+        text = REFERENCE_SOURCES.read_text(encoding="utf-8")
+        urls = (
+            "https://docs.langchain.com/oss/python/langgraph/interrupts",
+            "https://docs.langchain.com/oss/python/langgraph/persistence",
+            "https://docs.langchain.com/oss/python/langgraph/graph-api",
+            "https://modelcontextprotocol.io/docs/learn/architecture",
+            "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
+            "https://modelcontextprotocol.io/specification/2025-11-25/basic/transports",
+            "https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization",
+            "https://modelcontextprotocol.io/specification/2025-11-25/server/tools",
+            "https://modelcontextprotocol.io/specification/2025-11-25/server/resources",
+            "https://modelcontextprotocol.io/specification/2025-11-25/server/prompts",
+        )
+        for url in urls:
+            with self.subTest(url=url):
+                self.assertIn(url, text)
+        self.assertGreaterEqual(text.count("访问日期：2026-07-19"), 2)
+        self.assertRegex(text, re.compile(r"MCP.*2025-11-25.*稳定", re.DOTALL))
+        self.assertRegex(text, re.compile(r"实验.{0,80}明确标注", re.DOTALL))
 
 
 if __name__ == "__main__":
