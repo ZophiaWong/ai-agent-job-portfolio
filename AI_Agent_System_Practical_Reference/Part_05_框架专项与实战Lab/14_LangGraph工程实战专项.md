@@ -99,7 +99,7 @@ class AgentState(TypedDict, total=False):
     executed: bool | None
     execution_status: Literal["not_started", "success", "failed", "cancelled", "unknown"]
     tool_result: dict
-    validation_error: str
+    validation_error: str | None
 ```
 
 `approved` 表示允许按冻结参数执行。`executed=True` 表示副作用已经发生，`False` 表示确定未发生，`None` 表示外部结果仍不确定。批准、执行和结果确认不能共用一个布尔值；拒绝、取消、确定失败和未知也要分开记录。
@@ -132,6 +132,7 @@ def approval_node(state: AgentState) -> dict:
             "decision": "rejected",
             "executed": False,
             "execution_status": "cancelled",
+            "validation_error": None,
         }
 
     if decision not in {"approve", "edit"}:
@@ -159,12 +160,26 @@ def approval_node(state: AgentState) -> dict:
             "execution_status": "not_started",
             "validation_error": validation.error,
         }
-    return {"approved": validation.value, "decision": "approved", "executed": False}
+    return {
+        "approved": validation.value,
+        "decision": "approved",
+        "executed": False,
+        "validation_error": None,
+    }
+
+def route_after_approval(state: AgentState) -> str:
+    if state.get("decision") == "pending" and state.get("validation_error"):
+        return "approval"
+    if state.get("decision") == "approved" and state.get("validation_error") is None:
+        return "execute"
+    if state.get("decision") == "rejected" and state.get("validation_error") is None:
+        return "end"
+    return "internal_error"
 ```
 
 `interrupt()` 的 payload 必须可 JSON 序列化。恢复时，包含 interrupt 的节点会从头重新执行；interrupt() 前的副作用必须移走、变成幂等操作，或被事务边界包住。不要先创建审批记录、发消息，再指望代码从 interrupt 下一行继续。
 
-空值、`cancel`、拼写错误或未知 decision 都回到 pending，并带验证错误；只有显式的 `approve` 或 `edit` 能进入批准分支。编辑后的动作也不可信，要先经过 allowlist 和 schema 校验，再进入执行节点。校验必须发生在副作用之前。图用 conditional edge 把带 `validation_error` 的 pending 状态路由回审批节点，让下一次 node invocation 再调用一次 `interrupt()`。
+空值、`cancel`、拼写错误或未知 decision 都回到 pending，并带验证错误；只有显式的 `approve` 或 `edit` 能进入批准分支。编辑后的动作也不可信，要先经过 allowlist 和 schema 校验，再进入执行节点。校验必须发生在副作用之前。图用 conditional edge 同时检查 `decision == "pending"` 和非空 `validation_error`，再路由回审批节点。reject 和成功更新都显式清空旧错误，避免 LangGraph 合并部分更新后留下 stale error。
 
 ### 使用同一 thread 恢复
 
@@ -224,11 +239,15 @@ async def execute_node(state: AgentState) -> dict:
 
     outcome = classify_tool_outcome(result, action)
     if outcome == "unknown":
-        result = await notification_tool.lookup(
-            idempotency_key=key,
-            business_action_id=action["business_action_id"],
-        )
-        outcome = classify_tool_outcome(result, action)
+        try:
+            cached = await notification_tool.lookup(
+                idempotency_key=key,
+                business_action_id=action["business_action_id"],
+            )
+        except (TimeoutError, ConnectionError):
+            cached = None
+        result = cached
+        outcome = classify_tool_outcome(cached, action)
 
     if outcome == "success":
         return {"executed": True, "execution_status": "success", "tool_result": result}

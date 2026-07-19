@@ -112,7 +112,7 @@ class AgentState(TypedDict, total=False):
     ]
     tool_result: dict
     final_answer: str
-    validation_error: str
+    validation_error: str | None
 ```
 
 `proposed` 是模型或规则产生的候选动作。`approved` 是用户确认、可能编辑后又通过校验的参数快照。`executed` 只有在副作用发生且结果可验证时才为 true。审批不等于执行。
@@ -179,6 +179,7 @@ def approval_node(state: AgentState) -> dict:
             "decision": "rejected",
             "executed": False,
             "execution_status": "cancelled",
+            "validation_error": None,
         }
 
     if decision not in {"approve", "edit"}:
@@ -206,12 +207,26 @@ def approval_node(state: AgentState) -> dict:
             "execution_status": "not_started",
             "validation_error": validation.error,
         }
-    return {"approved": validation.value, "decision": "approved", "executed": False}
+    return {
+        "approved": validation.value,
+        "decision": "approved",
+        "executed": False,
+        "validation_error": None,
+    }
+
+def route_after_approval(state: AgentState) -> str:
+    if state.get("decision") == "pending" and state.get("validation_error"):
+        return "approval"
+    if state.get("decision") == "approved" and state.get("validation_error") is None:
+        return "execute"
+    if state.get("decision") == "rejected" and state.get("validation_error") is None:
+        return "end"
+    return "internal_error"
 ```
 
 `interrupt()` 会保存 checkpoint 并暂停；恢复后节点从头重新执行。interrupt() 前不要放不可重复副作用；无法移走时必须让副作用幂等，并保存可查询的执行结果。payload 要能 JSON 序列化。
 
-空值、`cancel`、拼写错误和未知 decision 都保持 pending，并返回验证错误。只有显式的 `approve` 或 `edit` 能走到 approved。审批人编辑后的 action 重新走 allowlist 和 schema；校验在任何副作用之前完成，执行节点再防御性校验一次。conditional edge 发现 `validation_error` 后回到审批节点，下一次 node invocation 再调用 `interrupt()`，不在同一次调用里写循环。
+空值、`cancel`、拼写错误和未知 decision 都保持 pending，并返回验证错误。只有显式的 `approve` 或 `edit` 能走到 approved。审批人编辑后的 action 重新走 allowlist 和 schema；校验在任何副作用之前完成，执行节点再防御性校验一次。conditional edge 同时检查 pending decision 和非空 `validation_error` 后回到审批节点。reject 与成功更新显式写入 `validation_error=None`，这样 partial state merge 会清掉上一次错误。
 
 ### 恢复接口的核心调用
 
@@ -272,11 +287,15 @@ async def execute_action_node(state: AgentState) -> dict:
 
     outcome = tool_gateway.classify_outcome(action, result)
     if outcome == "unknown":
-        result = await tool_gateway.lookup(
-            idempotency_key=key,
-            business_object_id=action["business_object_id"],
-        )
-        outcome = tool_gateway.classify_outcome(action, result)
+        try:
+            cached = await tool_gateway.lookup(
+                idempotency_key=key,
+                business_object_id=action["business_object_id"],
+            )
+        except (TimeoutError, ConnectionError):
+            cached = None
+        result = cached
+        outcome = tool_gateway.classify_outcome(action, cached)
 
     if outcome == "success":
         return {"executed": True, "execution_status": "success", "tool_result": result}
