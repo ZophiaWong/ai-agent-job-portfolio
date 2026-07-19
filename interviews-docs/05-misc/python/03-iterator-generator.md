@@ -59,6 +59,11 @@ print(list(Countdown(3)))  # [3, 2, 1]
 
 如果数据量可控且需要随机访问，用 list 更简单。如果数据大、来自网络/文件/分页 API，或需要边计算边输出，用 generator 更合理。面试里可以主动补一句：流式 API 如果涉及异步 I/O，应考虑 async generator，而不是普通 generator。
 
+## 可执行证据
+
+按[统一练习协议](../../practice-protocol.md)把 `batched` 示例保存为 `generator_demo.py`，先消费一次、
+再尝试复用同一个 generator；把命令、两次消费现象和适用场景记入 `generator-evidence.txt`。
+
 ## 自测题
 
 1. `iterable` 和 `iterator` 的核心区别是什么？

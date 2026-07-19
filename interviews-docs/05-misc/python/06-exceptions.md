@@ -55,6 +55,11 @@ def parse_limit(raw: str) -> int:
 
 可以按边界回答：底层补充上下文并保留异常链，服务层决定是否重试或降级，API 层转成用户可理解的错误响应，后台任务层记录可观测日志并决定是否进入死信或告警。这样比单纯说 `try/except` 更像工程经验。
 
+## 可执行证据
+
+按[统一练习协议](../../practice-protocol.md)把 `call_tool({})` 放进最小脚本并运行，让 traceback 输出到
+`exception-evidence.txt`；标注新异常、原始 `KeyError` 和 `from` 链各自提供了什么排查信息。
+
 ## 自测题
 
 1. 为什么业务代码通常捕获 `Exception` 而不是 `BaseException`？

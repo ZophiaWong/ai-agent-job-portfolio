@@ -66,6 +66,11 @@ with managed_resource("vector-client") as resource:
 
 适合 decorator 的是稳定、通用、可组合的横切逻辑，例如 retry、metrics、auth。适合 context manager 的是必须成对释放的资源，例如连接、临时文件、锁、trace span。回答时要补一句：框架层可以用 decorator，业务核心路径更要保持显式，避免调试困难。
 
+## 可执行证据
+
+按[统一练习协议](../../practice-protocol.md)把 `managed_resource` 示例保存为 `resource_demo.py`，在
+`with` 块内主动抛出异常后运行；将命令、open/close 输出顺序和异常是否仍上抛写入 `resource-evidence.txt`。
+
 ## 自测题
 
 1. `@d` 的本质是什么？
