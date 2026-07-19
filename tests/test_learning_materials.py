@@ -122,6 +122,24 @@ class LearningMaterialsTest(unittest.TestCase):
         self.assertRegex(reference_zone, re.compile(r"参考|评分|rubric", re.IGNORECASE))
         return cold_zone, reference_zone
 
+    def test_interview_modules_declare_exactly_one_primary_competency(self):
+        expected_primary = {
+            LLM_FAILURE_BOUNDARIES: "C02.01",
+            PYTHON_DEBUGGING: "C01.02",
+            SQL_POSTGRESQL: "C12.01",
+        }
+        for path, expected in expected_primary.items():
+            with self.subTest(module=path.name):
+                text = path.read_text(encoding="utf-8")
+                primary_lines = re.findall(r"(?m)^主要能力：([^\n]+)$", text)
+                self.assertEqual(len(primary_lines), 1, f"{path.name} needs one primary line")
+                primary_ids = re.findall(r"C\d{2}\.\d{2}", primary_lines[0])
+                self.assertEqual(
+                    primary_ids,
+                    [expected],
+                    f"{path.name} must declare exactly one primary competency",
+                )
+
     def test_material_indexes_are_real_navigation_pages(self):
         for index in PLACEHOLDER_INDEXES:
             with self.subTest(index=index.relative_to(REPO_ROOT)):
@@ -789,6 +807,18 @@ class LearningMaterialsTest(unittest.TestCase):
                 re.IGNORECASE | re.DOTALL,
             ),
         )
+        self.assertRegex(
+            reference_zone,
+            re.compile(
+                r"token.{0,40}概率分布.{0,60}更尖锐.{0,80}通常.{0,40}降低.{0,24}采样随机性",
+                re.IGNORECASE | re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            reference_zone,
+            re.compile(r"不.{0,12}直接.{0,24}缩小.{0,30}候选\s*token.{0,20}取值范围", re.IGNORECASE),
+        )
+        self.assertNotIn("收窄采样范围", reference_zone)
         for boundary in ("结构化", "schema", "确定性后处理", "拒答", "不确定", "升级", "弃答"):
             with self.subTest(boundary=boundary):
                 self.assertIn(boundary, reference_zone)
@@ -845,6 +875,29 @@ class LearningMaterialsTest(unittest.TestCase):
             ),
         )
         self.assertNotRegex(combined, re.compile(r"已在\s*PostgreSQL.{0,20}(?:运行|执行|验证)", re.IGNORECASE))
+
+        transaction_example = next(
+            block
+            for block in re.findall(r"```sql\n(.*?)```", reference_zone, re.DOTALL)
+            if "UPDATE payments" in block
+        )
+        self.assertIn("WHERE account_id = 1 AND status = 'paid'", transaction_example)
+        self.assertRegex(transaction_example, re.compile(r"RETURNING\s+payment_id", re.IGNORECASE))
+        self.assertNotIn("FOR UPDATE", transaction_example)
+        self.assertRegex(
+            reference_zone,
+            re.compile(
+                r"READ COMMITTED.{0,200}等待.{0,200}重新检查.{0,80}WHERE.{0,120}(?:0 行|零行)",
+                re.IGNORECASE | re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            reference_zone,
+            re.compile(
+                r"FOR UPDATE.{0,220}(?:先读|先读取).{0,160}(?:跨行|业务不变量)",
+                re.IGNORECASE | re.DOTALL,
+            ),
+        )
 
     def test_new_competency_gap_modules_are_linked_from_topic_indexes(self):
         ai_index = (AI_INTERVIEW_DIR / "README.md").read_text(encoding="utf-8")

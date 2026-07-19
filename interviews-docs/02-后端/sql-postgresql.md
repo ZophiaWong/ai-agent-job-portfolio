@@ -1,6 +1,8 @@
 # SQL 与 PostgreSQL：查询、事务和执行计划
 
-主要能力：`C07.03` 和 `C12.01`。本题按[统一练习协议](../practice-protocol.md)练习。
+主要能力：`C12.01`。
+
+关联能力：`C07.03`。本题按[统一练习协议](../practice-protocol.md)练习。
 
 ## 冷启动：先写 SQL，再推演
 
@@ -37,7 +39,7 @@ INSERT INTO payments VALUES
 在文件中继续写下面三部分，答案和推演记录到 `sql-postgresql-reasoning.md`。
 
 1. 用 `JOIN`、`GROUP BY`、`HAVING` 和窗口函数 `OVER (...)` 找出已支付总额不小于 100 的账户，并在各自组织内按总额排名。先写预期行，再逐步推演 JOIN 和分组后的中间结果。
-2. 写一个 `TRANSACTION`事务，将账户 1 的两笔已支付记录改为 `refunded`。说明两个会话同时操作时需要什么锁或隔离级别，以及失败时如何回滚。
+2. 写一个 `TRANSACTION`事务，用带条件的 `UPDATE ... RETURNING` 将账户 1 的两笔已支付记录改为 `refunded`。分析 PostgreSQL 默认隔离级别下两个会话同时执行该语句的结果，以及失败时如何回滚。
 3. 候选索引是 `CREATE INDEX ... ON payments (account_id, paid_at) WHERE status = 'paid'`。为查询加上 `EXPLAIN`，写出你期望观察的计划节点或计划属性，再说明小表为什么仍可能选顺序扫描。
 
 有 PostgreSQL 环境时，可用一个临时库运行 fixture 和查询，保留 `psql` 输出与 `EXPLAIN (ANALYZE, BUFFERS)` 计划。没有环境时，产物只能标为 inspectable：检查语法、预期结果和计划推理，不得标为 runnable 或 executed。
@@ -86,21 +88,20 @@ ORDER BY org_id, org_rank;
 ```sql
 BEGIN; -- TRANSACTION starts here
 
-SELECT payment_id
-FROM payments
-WHERE account_id = 1 AND status = 'paid'
-ORDER BY payment_id
-FOR UPDATE;
-
 UPDATE payments
 SET status = 'refunded'
-WHERE account_id = 1 AND status = 'paid';
+WHERE account_id = 1 AND status = 'paid'
+RETURNING payment_id;
 
 COMMIT;
 -- 任一语句失败时，客户端应 ROLLBACK，而不是继续提交。
 ```
 
-`FOR UPDATE` 让竞争会话等待同一批行，但事务契约还要定义“重复退款”的结果。如果要保护跨多条查询的谓词，再根据并发契约考虑 `SERIALIZABLE` 和重试。
+普通 `UPDATE` 会对它实际更新的行加锁，这道题不需要为了加锁而先 `SELECT`。在默认的 `READ COMMITTED` 下，第二个会话遇到正在更新的目标行时会等待。第一个会话提交后，第二个会话对行的新版本重新检查 `WHERE` 条件；`status` 已经是 `refunded`，因此这次 `RETURNING` 通常返回 0 行。调用方应将“更新两行”和“更新零行”定义成明确的业务结果。
+
+### `FOR UPDATE` 用在先读后决策的事务
+
+当事务必须先读取余额，再根据读值修改多行，以维护跨行业务不变量时，可以在事务中使用 `SELECT ... FOR UPDATE`。这和本题的单条条件更新不是同一个场景。如果不变量涉及尚不存在的行或跨多条查询的谓词，还需根据并发契约考虑 `SERIALIZABLE` 和重试。
 
 ## EXPLAIN 和索引评分要点
 
