@@ -39,6 +39,7 @@ DSA_CHAPTERS = (
     "07_堆栈队列二分.md",
 )
 PYTHON_DIR = REPO_ROOT / "interviews-docs" / "05-misc" / "python"
+NODE_DIR = REPO_ROOT / "interviews-docs" / "05-misc" / "nodejs"
 
 
 def python_fences(text: str) -> list[str]:
@@ -252,6 +253,106 @@ class LearningMaterialsTest(unittest.TestCase):
             with self.subTest(required=required):
                 self.assertIn("## 可执行证据", text)
                 self.assertIn(required, text)
+
+    def test_node_series_has_versioned_boundaries_and_executable_practice(self):
+        readme = (NODE_DIR / "README.md").read_text(encoding="utf-8")
+        event_loop = (NODE_DIR / "01-event-loop.md").read_text(encoding="utf-8")
+        promise_errors = (
+            NODE_DIR / "03-promise-async-await-errors.md"
+        ).read_text(encoding="utf-8")
+        commonjs_esm = (NODE_DIR / "05-commonjs-esm.md").read_text(
+            encoding="utf-8"
+        )
+        retry = (NODE_DIR / "10-timeout-cancel-retry-idempotency.md").read_text(
+            encoding="utf-8"
+        )
+        testing = (NODE_DIR / "11-testing-mock-integration.md").read_text(
+            encoding="utf-8"
+        )
+        frameworks = (NODE_DIR / "12-express-fastify-nestjs.md").read_text(
+            encoding="utf-8"
+        )
+        comparison = (
+            REPO_ROOT / "interviews-docs" / "05-misc" / "python-vs-nodejs.md"
+        ).read_text(encoding="utf-8")
+        backend_index = (
+            REPO_ROOT / "interviews-docs" / "02-后端" / "README.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("[统一练习协议](../../practice-protocol.md)", readme)
+        self.assertRegex(readme, re.compile(r"C11.*P2", re.DOTALL))
+        self.assertIn("libuv 1.45.0（Node.js 20）", event_loop)
+        self.assertRegex(
+            event_loop, re.compile(r"timers.{0,56}poll.{0,56}之后", re.DOTALL)
+        )
+        self.assertRegex(
+            commonjs_esm,
+            re.compile(r"v20\.17\.0.{0,88}v20\.19\.0", re.DOTALL),
+        )
+        self.assertRegex(
+            commonjs_esm,
+            re.compile(r"完全同步.{0,64}top-level await", re.DOTALL),
+        )
+        self.assertRegex(
+            frameworks,
+            re.compile(r"Express 5.{0,100}rejected Promise.{0,100}next", re.DOTALL),
+        )
+        self.assertRegex(
+            promise_errors,
+            re.compile(r"Node 15\+.{0,96}--unhandled-rejections", re.DOTALL),
+        )
+
+        retry_fences = re.findall(r"```js\n(.*?)```", retry, re.DOTALL)
+        bounded_retry = next(
+            (
+                fence
+                for fence in retry_fences
+                if "retryable" in fence and "Retry-After" in fence
+            ),
+            None,
+        )
+        self.assertIsNotNone(bounded_retry, "missing bounded retry example")
+        self.assertIn("AbortSignal", bounded_retry)
+        self.assertIn("attempt === attempts", bounded_retry)
+        self.assertLess(
+            bounded_retry.index("attempt === attempts"),
+            bounded_retry.index("await sleep"),
+        )
+        self.assertRegex(bounded_retry, re.compile(r"2 \*\*.*Math\.random", re.DOTALL))
+        self.assertRegex(
+            bounded_retry,
+            re.compile(r"if \(!retryable\(error\)\) throw error"),
+        )
+
+        self.assertRegex(
+            testing,
+            re.compile(r"class .*Service.*constructor\(.*client", re.DOTALL),
+        )
+        self.assertRegex(
+            testing,
+            re.compile(r"new .*Service\(fakeClient\).{0,120}service\.", re.DOTALL),
+        )
+        self.assertRegex(
+            comparison,
+            re.compile(r"Python 3\.13.{0,88}实验", re.DOTALL),
+        )
+        self.assertRegex(
+            comparison,
+            re.compile(
+                r"Python 3\.14\+.{0,120}(?:正式支持|不再.*实验).{0,72}可选",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            backend_index,
+            re.compile(
+                r"\[Node(?:\.js|JS)?[^\]]*\]\(\.\./05-misc/nodejs/README\.md\)"
+            ),
+        )
+        self.assertRegex(
+            backend_index,
+            re.compile(r"\[Python vs NodeJS\]\(\.\./05-misc/python-vs-nodejs\.md\)"),
+        )
 
 
 if __name__ == "__main__":
