@@ -42,7 +42,7 @@ Python、后端、SQL/DSA、TypeScript/Node 和求职表达。能力等级必须
 - [后端面试资料](interviews-docs/02-后端/README.md)
 - [DSA 面试资料](interviews-docs/03-DS_AL/README.md)
 - [简历、自我介绍与行为面试](interviews-docs/04-career/README.md)
-- [工程实践与 vibe coding](best-practice/README.md)
+- [受控的 Agent 辅助开发](best-practice/README.md)
 - [项目证据索引](projects/README.md)：MeterDesk 与 Forge Harness。
 
 ## 公开内容与私人状态
@@ -59,7 +59,6 @@ Python、后端、SQL/DSA、TypeScript/Node 和求职表达。能力等级必须
 .codex/skills/             Codex 求职教练与 Anki skill
 AI_Agent_System_Practical_Reference/  系统化学习资料
 interviews-docs/           技术与求职表达练习
-learning-materials/        专题速查材料
 best-practice/             工程方法和案例
 projects/                  独立项目的证据索引
 tests/                     状态脚本与导航测试
