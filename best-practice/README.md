@@ -4,7 +4,9 @@
 包含可检查的工程实践、明确的适用边界和可复现的验证方式；不能只是一份工具心得或未验证的
 提示词集合。
 
-当前没有已核准的公开条目。后续资料通过上述准入标准后，再从本页加入导航。
+## 已核准条目
+
+- [受控的 Agent 辅助开发](agent-assisted-development/README.md)：把任务范围、证据来源、最小 patch、验证和 review 串成可检查的流程；其中的 Forge Harness 主张链接到固定公开快照。
 
 学习后，用[统一练习协议](../interviews-docs/practice-protocol.md)把方法论转成一次可解释的
 任务演练，并回到[项目证据索引](../projects/README.md)核对真实项目主张。
