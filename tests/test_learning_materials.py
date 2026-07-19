@@ -549,11 +549,24 @@ class LearningMaterialsTest(unittest.TestCase):
             re.compile(r"没有保留.*?可检查.*?证据没有保留", re.DOTALL),
         )
         self.assertRegex(text, re.compile(r"没有实践.*?只描述.*?计划", re.DOTALL))
-        metrics = re.search(r"## 指标和个人叙事\n(.*?)(?:\n## |\Z)", readme.read_text(encoding="utf-8"), re.DOTALL)
+        metrics = re.search(
+            r"## 指标和个人叙事\n(.*?)(?:\n## |\Z)",
+            readme.read_text(encoding="utf-8"),
+            re.DOTALL,
+        )
         self.assertIsNotNone(metrics, "missing metrics section")
         self.assertIn("测量候选指标", metrics.group(1))
         self.assertRegex(metrics.group(1), re.compile(r"方法.*?记录", re.DOTALL))
         self.assertNotRegex(metrics.group(1), re.compile(r"\d+(?:\.\d+)?\s*(?:%|百分之|倍|分钟|小时)"))
+        result_verbs = r"(?:减少|增加|提高|提升|下降|降低|节省)"
+        count_or_point_units = r"(?:次|项|百分点|个(?:点)?|点)"
+        self.assertNotRegex(
+            metrics.group(1),
+            re.compile(
+                rf"(?:{result_verbs}.{{0,12}}\d+\s*{count_or_point_units}|"
+                rf"\d+\s*{count_or_point_units}.{{0,12}}{result_verbs})"
+            ),
+        )
         self.assertIn("范围 → 上下文 → 计划 → 最小 patch → 验证 → review → bad case 回流", text)
 
 
