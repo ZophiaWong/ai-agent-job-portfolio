@@ -82,6 +82,12 @@ NODE_CHAPTERS = tuple(f"{chapter:02d}-{name}.md" for chapter, name in (
     (11, "testing-mock-integration"),
     (12, "express-fastify-nestjs"),
 ))
+AI_INTERVIEW_DIR = REPO_ROOT / "interviews-docs" / "01-AI"
+BACKEND_INTERVIEW_DIR = REPO_ROOT / "interviews-docs" / "02-后端"
+LLM_FAILURE_BOUNDARIES = AI_INTERVIEW_DIR / "llm-failure-boundaries.md"
+PYTHON_DEBUGGING = BACKEND_INTERVIEW_DIR / "python-debugging.md"
+SQL_POSTGRESQL = BACKEND_INTERVIEW_DIR / "sql-postgresql.md"
+LEARNING_REFERENCE_MARKER = "<!-- 练习分隔线：完成冷答后再继续 -->"
 
 
 def python_fences(text: str) -> list[str]:
@@ -89,6 +95,33 @@ def python_fences(text: str) -> list[str]:
 
 
 class LearningMaterialsTest(unittest.TestCase):
+    def assert_interview_module_contract(
+        self, path: Path, competency_ids: tuple[str, ...]
+    ) -> tuple[str, str]:
+        text = path.read_text(encoding="utf-8")
+        self.assertIn("[统一练习协议](../practice-protocol.md)", text)
+        for competency_id in competency_ids:
+            self.assertIn(competency_id, text)
+        self.assertIn(LEARNING_REFERENCE_MARKER, text)
+        cold_zone, reference_zone = text.split(LEARNING_REFERENCE_MARKER, maxsplit=1)
+        self.assertRegex(cold_zone, re.compile(r"冷启动|冷答"))
+        self.assertRegex(cold_zone, re.compile(r"迁移题"))
+        self.assertRegex(cold_zone, re.compile(r"延迟复测"))
+        self.assertRegex(cold_zone, re.compile(r"`[^`]+\.(?:py|sql|md|txt|json)`"))
+        self.assertRegex(
+            cold_zone,
+            re.compile(
+                r"(?:阅读|读完).{0,40}不(?:能|算).{0,24}(?:掌握|证据)",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            cold_zone,
+            re.compile(r"提示.{0,40}不(?:能|算).{0,24}独立证据", re.DOTALL),
+        )
+        self.assertRegex(reference_zone, re.compile(r"参考|评分|rubric", re.IGNORECASE))
+        return cold_zone, reference_zone
+
     def test_material_indexes_are_real_navigation_pages(self):
         for index in PLACEHOLDER_INDEXES:
             with self.subTest(index=index.relative_to(REPO_ROOT)):
@@ -741,6 +774,84 @@ class LearningMaterialsTest(unittest.TestCase):
             ),
         )
         self.assertIn("范围 → 上下文 → 计划 → 最小 patch → 验证 → review → bad case 回流", text)
+
+    def test_llm_failure_boundaries_require_classification_and_bounded_remedy(self):
+        cold_zone, reference_zone = self.assert_interview_module_contract(
+            LLM_FAILURE_BOUNDARIES, ("C02.01",)
+        )
+        self.assertRegex(cold_zone, re.compile(r"分类.{0,80}故障模式", re.DOTALL))
+        self.assertRegex(cold_zone, re.compile(r"选择.{0,80}处理|补救", re.DOTALL))
+        self.assertRegex(
+            reference_zone,
+            re.compile(
+                r"temperature.{0,240}(?:不确定|非确定)|"
+                r"(?:不确定|非确定).{0,240}temperature",
+                re.IGNORECASE | re.DOTALL,
+            ),
+        )
+        for boundary in ("结构化", "schema", "确定性后处理", "拒答", "不确定", "升级", "弃答"):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, reference_zone)
+        self.assertRegex(reference_zone, re.compile(r"不代表.*项目.*已实现", re.DOTALL))
+
+    def test_python_debugging_module_demands_executed_diagnostic_evidence(self):
+        cold_zone, reference_zone = self.assert_interview_module_contract(
+            PYTHON_DEBUGGING, ("C01.02",)
+        )
+        for step in ("复现", "traceback", "日志", "假设", "最小修复", "回归测试"):
+            with self.subTest(step=step):
+                self.assertIn(step, cold_zone + reference_zone)
+        python_examples = python_fences(reference_zone)
+        self.assertTrue(python_examples, "missing standard-library debugging fixture")
+        self.assertTrue(
+            any("unittest" in example and "assert" in example for example in python_examples),
+            "debugging fixture must include a runnable regression test",
+        )
+        runnable_example = next(
+            example for example in python_examples if "class AverageLatencyTest" in example
+        )
+        namespace = {"__name__": "embedded_debugging_evidence"}
+        exec(compile(runnable_example, str(PYTHON_DEBUGGING), "exec"), namespace)
+        suite = unittest.defaultTestLoader.loadTestsFromTestCase(
+            namespace["AverageLatencyTest"]
+        )
+        result = unittest.TestResult()
+        suite.run(result)
+        self.assertTrue(result.wasSuccessful(), result.errors + result.failures)
+        self.assertRegex(reference_zone, re.compile(r"0–1.{0,100}未复现就猜", re.DOTALL))
+        self.assertRegex(reference_zone, re.compile(r"0–1.{0,140}重写整个函数", re.DOTALL))
+
+    def test_sql_postgresql_module_covers_query_and_plan_reasoning_without_execution_claims(self):
+        cold_zone, reference_zone = self.assert_interview_module_contract(
+            SQL_POSTGRESQL, ("C07.03", "C12.01")
+        )
+        combined = cold_zone + reference_zone
+        for construct in (
+            "JOIN", "GROUP BY", "HAVING", "OVER (", "TRANSACTION", "CREATE INDEX", "EXPLAIN"
+        ):
+            with self.subTest(construct=construct):
+                self.assertIn(construct, combined.upper())
+        self.assertRegex(cold_zone, re.compile(r"预期行|预期结果"))
+        self.assertRegex(cold_zone, re.compile(r"计划.{0,40}属性|计划.{0,40}节点", re.DOTALL))
+        self.assertRegex(
+            combined,
+            re.compile(r"PostgreSQL.{0,120}(?:假设|假定)", re.IGNORECASE | re.DOTALL),
+        )
+        self.assertRegex(
+            combined,
+            re.compile(
+                r"没有.{0,20}(?:PostgreSQL|psql).{0,100}(?:不要|不得).{0,40}已执行",
+                re.IGNORECASE | re.DOTALL,
+            ),
+        )
+        self.assertNotRegex(combined, re.compile(r"已在\s*PostgreSQL.{0,20}(?:运行|执行|验证)", re.IGNORECASE))
+
+    def test_new_competency_gap_modules_are_linked_from_topic_indexes(self):
+        ai_index = (AI_INTERVIEW_DIR / "README.md").read_text(encoding="utf-8")
+        backend_index = (BACKEND_INTERVIEW_DIR / "README.md").read_text(encoding="utf-8")
+        self.assertIn("[LLM 失败边界](llm-failure-boundaries.md)", ai_index)
+        self.assertIn("[Python 调试](python-debugging.md)", backend_index)
+        self.assertIn("[SQL 与 PostgreSQL](sql-postgresql.md)", backend_index)
 
 
 if __name__ == "__main__":

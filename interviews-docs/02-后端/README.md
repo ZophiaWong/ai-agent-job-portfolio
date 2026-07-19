@@ -5,6 +5,8 @@
 
 ## 优先入口
 
+- [Python 调试](python-debugging.md)：`C01.02`，从复现和 traceback 出发，完成最小修复与回归测试。
+- [SQL 与 PostgreSQL](sql-postgresql.md)：`C07.03` / `C12.01`，练习查询推导、事务、索引和 EXPLAIN。
 - [Python 后端面试练习](../05-misc/python/README.md)：从 C01/C07 的 Python 基础到 asyncio、FastAPI、测试和交付证据。
 - [Node.js 与 TypeScript 面试练习](../05-misc/nodejs/README.md)：C11 默认目标 2；运行时边界、可靠性、测试和框架取舍。
 - [Python vs NodeJS](../05-misc/python-vs-nodejs.md)：以工作负载、运行时模型和团队约束做跨栈选择。
