@@ -1075,6 +1075,7 @@ class LearningMaterialsTest(unittest.TestCase):
                     if "class AgentState" in block
                 )
                 self.assertRegex(state_schema, re.compile(r"validation_error:\s*str\s*\|\s*None"))
+                self.assertRegex(state_schema, re.compile(r"tool_result:\s*dict\s*\|\s*None"))
 
                 approval = next(
                     block
