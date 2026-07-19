@@ -5,6 +5,7 @@
 
 ## 优先入口
 
+- [Python 后端面试练习](../05-misc/python/README.md)：从 C01/C07 的 Python 基础到 asyncio、FastAPI、测试和交付证据。
 - [Python 后端工程实践](../../AI_Agent_System_Practical_Reference/Part_03_Python工程化与生产治理/08_Python后端视角的Agent工程实践.md)：服务边界、依赖、异步 I/O、配置与交付。
 - [评测、监控、可观测性与 Bad Case 回流](../../AI_Agent_System_Practical_Reference/Part_03_Python工程化与生产治理/09_评测_监控_可观测性与BadCase回流.md)：指标、日志、trace 和问题闭环。
 - [安全、权限、风控与 Human in the Loop](../../AI_Agent_System_Practical_Reference/Part_03_Python工程化与生产治理/10_安全_权限_风控与Human_in_the_loop.md)：权限、审计、幂等与高风险操作。
