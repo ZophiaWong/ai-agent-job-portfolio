@@ -66,6 +66,12 @@ export function joinRoot(name) {
 3. Node 如何判断 `.js` 是 CJS 还是 ESM？
    答：主要看最近 package.json 的 `"type"` 字段。
 
+## 可执行证据
+
+按[统一练习协议](../../practice-protocol.md)在目标 Node 版本分别运行同步 ESM 和含 top-level await 的 ESM
+的 `require()`，记录结果。若无 Node，手动检查版本（v20.17.0/v20.19.0）、package `type` 与依赖图是否含
+top-level await。可检查结果：模块判定表，以及为何应改用 `import()` 的结论。
+
 ## 参考链接
 
 - [Node.js Modules: CommonJS](https://nodejs.org/api/modules.html)

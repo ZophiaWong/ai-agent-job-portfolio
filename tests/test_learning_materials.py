@@ -40,6 +40,20 @@ DSA_CHAPTERS = (
 )
 PYTHON_DIR = REPO_ROOT / "interviews-docs" / "05-misc" / "python"
 NODE_DIR = REPO_ROOT / "interviews-docs" / "05-misc" / "nodejs"
+NODE_CHAPTERS = tuple(f"{chapter:02d}-{name}.md" for chapter, name in (
+    (1, "event-loop"),
+    (2, "microtask-task"),
+    (3, "promise-async-await-errors"),
+    (4, "stream-backpressure"),
+    (5, "commonjs-esm"),
+    (6, "typescript-types"),
+    (7, "process-worker-child-process"),
+    (8, "memory-leak-async-resource"),
+    (9, "http-lifecycle"),
+    (10, "timeout-cancel-retry-idempotency"),
+    (11, "testing-mock-integration"),
+    (12, "express-fastify-nestjs"),
+))
 
 
 def python_fences(text: str) -> list[str]:
@@ -353,6 +367,90 @@ class LearningMaterialsTest(unittest.TestCase):
             backend_index,
             re.compile(r"\[Python vs NodeJS\]\(\.\./05-misc/python-vs-nodejs\.md\)"),
         )
+
+    def test_node_review_contracts_protect_evidence_and_runtime_boundaries(self):
+        readme = (NODE_DIR / "README.md").read_text(encoding="utf-8")
+        retry = (NODE_DIR / "10-timeout-cancel-retry-idempotency.md").read_text(
+            encoding="utf-8"
+        )
+        testing = (NODE_DIR / "11-testing-mock-integration.md").read_text(
+            encoding="utf-8"
+        )
+        frameworks = (NODE_DIR / "12-express-fastify-nestjs.md").read_text(
+            encoding="utf-8"
+        )
+        promise_errors = (
+            NODE_DIR / "03-promise-async-await-errors.md"
+        ).read_text(encoding="utf-8")
+        root_readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+
+        self.assertRegex(
+            readme,
+            re.compile(r"能力 C11（Node\.js、TypeScript 与跨运行时\s*取舍）的\*\*默认目标为 2\*\*"),
+        )
+        for chapter in NODE_CHAPTERS:
+            with self.subTest(chapter=chapter):
+                text = (NODE_DIR / chapter).read_text(encoding="utf-8")
+                self.assertIn("## 可执行证据", text)
+                self.assertIn("[统一练习协议](../../practice-protocol.md)", text)
+                self.assertRegex(text, re.compile(r"若无 Node.{0,160}(?:手动|检查|trace)", re.DOTALL))
+                self.assertIn("可检查结果", text)
+                self.assertIn("访问日期：2026-07-19。", text)
+
+        retry_example = next(
+            fence
+            for fence in re.findall(r"```js\n(.*?)```", retry, re.DOTALL)
+            if "async function retry" in fence
+        )
+        attempt_start = retry_example.index("for (let attempt")
+        abort_check = retry_example.index("signal?.throwIfAborted()")
+        operation = retry_example.index("return await operation({ signal })")
+        final_attempt = retry_example.index("if (attempt === attempts) throw error")
+        retry_after_parse = retry_example.index("function retryAfterMs")
+        retry_after_wait = retry_example.index("retryAfterMs(error.retryAfter)")
+        delay = retry_example.index("await sleep(delayMs, undefined, { signal })")
+        self.assertGreater(abort_check, attempt_start)
+        self.assertLess(abort_check, operation)
+        self.assertLess(operation, final_attempt)
+        self.assertLess(retry_after_parse, retry_after_wait)
+        self.assertLess(retry_after_wait, delay)
+        self.assertLess(final_attempt, delay)
+        self.assertIn("Math.max(fullJitter, retryAfterMs(error.retryAfter))", retry_example)
+
+        service_class = re.search(
+            r"class SearchService \{(.*?)\n\}", testing, re.DOTALL
+        )
+        self.assertIsNotNone(service_class, "missing production SearchService")
+        self.assertIn("this.client.search(query)", service_class.group(1))
+        self.assertRegex(
+            testing,
+            re.compile(
+                r"new SearchService\(fakeClient\).*?await service\.answer\(\"rag\"\)",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            frameworks,
+            re.compile(r"Express 5.{0,120}rejected Promise.{0,120}next", re.DOTALL),
+        )
+        self.assertRegex(frameworks, re.compile(r"Express 4.{0,80}不应", re.DOTALL))
+        self.assertRegex(
+            promise_errors,
+            re.compile(
+                r"Node 15\+.{0,120}Node 26\.x.{0,120}--unhandled-rejections=throw",
+                re.DOTALL,
+            ),
+        )
+        self.assertRegex(
+            promise_errors,
+            re.compile(r"没有.{0,80}unhandledRejection.{0,120}listener", re.DOTALL),
+        )
+        self.assertRegex(
+            promise_errors,
+            re.compile(r"listener.{0,120}(?:改变|改变了).{0,80}(?:fallback|回退)", re.DOTALL),
+        )
+        self.assertNotIn("05-misc/nodejs/README.md", root_readme)
+        self.assertNotIn("05-misc/python-vs-nodejs.md", root_readme)
 
 
 if __name__ == "__main__":

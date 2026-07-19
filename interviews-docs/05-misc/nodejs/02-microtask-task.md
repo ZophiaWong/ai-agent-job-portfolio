@@ -63,7 +63,15 @@ console.log("c");
 3. 大量 microtask 的风险是什么？
    答：推迟 event loop 进入 I/O、timer 等阶段，造成 starvation。
 
+## 可执行证据
+
+按[统一练习协议](../../practice-protocol.md)运行本页第一个片段并记录 `sync 1/sync 2/nextTick/promise/timeout`
+的队列顺序。若无 Node，手动 trace 同步栈、nextTick queue、Promise microtask queue 和 timers 的出队过程。
+可检查结果：一张四步队列 trace，且说明递归 nextTick 为什么会饿死 I/O。
+
 ## 参考链接
 
 - [Understanding process.nextTick](https://nodejs.org/en/learn/asynchronous-work/understanding-processnexttick)
 - [Understanding setImmediate](https://nodejs.org/en/learn/asynchronous-work/understanding-setimmediate)
+
+访问日期：2026-07-19。

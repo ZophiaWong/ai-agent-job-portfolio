@@ -81,6 +81,12 @@ wire contract，再让 integration test 从路由或公开 service API 进入，
 3. integration test 的价值是什么？
    答：覆盖多个组件按真实接口协作，发现单元测试发现不了的问题。
 
+## 可执行证据
+
+按[统一练习协议](../../practice-protocol.md)把 `SearchService` 示例保存为测试文件并运行 `node --test`，确认断言通过。
+若无 Node，手动检查 fake 只注入到构造器、测试调用 `service.answer`，且生产方法调用 `client.search`。
+可检查结果：测试输出或 fake → SearchService → client.search 的三段调用 trace。
+
 ## 参考链接
 
 - [Node.js Test Runner](https://nodejs.org/api/test.html)

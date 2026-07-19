@@ -56,6 +56,7 @@ async function retry(operation, { attempts = 3, baseDelayMs = 100, signal } = {}
   if (!Number.isInteger(attempts) || attempts < 1) throw new RangeError("attempts >= 1");
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    signal?.throwIfAborted(); // do not invoke an operation after pre-abort
     try {
       return await operation({ signal }); // fetch/client must pass this signal downstream
     } catch (error) {
@@ -96,6 +97,12 @@ whole request by a deadline and attach an idempotency key before retrying a writ
    答：有副作用且不幂等的写操作，如扣款、发消息、创建资源。
 3. 重试为什么要有上限和退避？
    答：控制延迟和流量，避免把下游故障放大。
+
+## 可执行证据
+
+按[统一练习协议](../../practice-protocol.md)用 fake operation 依次抛 503、429（带 `Retry-After`）、400 和 abort，
+记录调用次数与等待决策。若无 Node，手动 trace retryable 分类、attempts 边界、pre-abort 和最后一次失败路径。
+可检查结果：四行重试决策表，证明 400/abort 不重试且最后一次失败没有 sleep。
 
 ## 参考链接
 
