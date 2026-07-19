@@ -11,7 +11,7 @@
 ## 2. 调研方法
 
 - 时间范围：2026-04-29 前后公开可访问岗位与搜索结果。
-- 语言范围：中文语境求职为主，英文岗位为辅，用于校准国际市场对 Agentic Workflow、RAG、Tool Use、Evaluation、Observability 的要求。
+- 语言范围：目标解读语境是中国大陆求职，但实际样本以国际公司和英文 JD 为主。
 - 样本口径：公开 JD 页面、公司招聘页、Greenhouse/Ashby/Workable 等公开页面，以及可访问搜索摘要。
 - 样本数量：25 条公开岗位样本。
 - 样本偏差：25 条中国际公司和英文 JD 占多数，Senior、Architect、Head 等中高级岗位也较多。
