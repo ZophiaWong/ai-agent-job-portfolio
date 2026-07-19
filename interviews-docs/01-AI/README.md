@@ -5,6 +5,7 @@
 
 ## 核心主题
 
+- [LLM 失败边界](llm-failure-boundaries.md)：`C02.01`，练习故障分类、结构化验证和弃答/升级边界。
 - [Agent 基础与系统架构](../../AI_Agent_System_Practical_Reference/Part_01_Agent核心原理/01_Agent基础与系统架构.md)
 - [规划、Workflow 与多 Agent 系统](../../AI_Agent_System_Practical_Reference/Part_01_Agent核心原理/02_规划_Workflow_与多Agent系统.md)
 - [工具调用、Function Calling、MCP 与行动能力](../../AI_Agent_System_Practical_Reference/Part_01_Agent核心原理/03_工具调用_FunctionCalling_MCP_与行动能力.md)
