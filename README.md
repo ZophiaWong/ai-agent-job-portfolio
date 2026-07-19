@@ -41,8 +41,6 @@ Python、后端、SQL/DSA、TypeScript/Node 和求职表达。能力等级必须
 - [AI 面试资料](interviews-docs/01-AI/README.md)
 - [后端面试资料](interviews-docs/02-后端/README.md)
 - [DSA 面试资料](interviews-docs/03-DS_AL/README.md)
-- [Python 专项](interviews-docs/05-misc/python/README.md)
-- [Node.js 专项](interviews-docs/05-misc/nodejs/README.md)
 - [简历、自我介绍与行为面试](interviews-docs/04-career/README.md)
 - [工程实践与 vibe coding](best-practice/README.md)
 - [项目证据索引](projects/README.md)：MeterDesk 与 Forge Harness。

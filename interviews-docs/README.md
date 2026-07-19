@@ -9,8 +9,6 @@
 | Python、数据库、服务端与可靠性 | [后端专项](02-后端/README.md) | 如何把 Agent 能力交付为可靠服务？ |
 | 数据结构与算法 | [DSA 专项](03-DS_AL/README.md) | 如何在约束下写出可运行、可解释的解法？ |
 | 简历、项目表达与行为面试 | [职业表达](04-career/README.md) | 如何用真实证据说明个人贡献和取舍？ |
-| Python 基础与后端工程 | [Python 专项](05-misc/python/README.md) | 如何回答 Python、异步、测试和 FastAPI 追问？ |
-| TypeScript、Node.js 与服务端 | [Node.js 专项](05-misc/nodejs/README.md) | 如何回答运行时、并发、HTTP 和工程质量追问？ |
 
 ## 使用方式
 
