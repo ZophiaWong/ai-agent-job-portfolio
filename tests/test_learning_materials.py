@@ -383,6 +383,9 @@ class LearningMaterialsTest(unittest.TestCase):
             NODE_DIR / "03-promise-async-await-errors.md"
         ).read_text(encoding="utf-8")
         root_readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        interviews_index = (REPO_ROOT / "interviews-docs" / "README.md").read_text(
+            encoding="utf-8"
+        )
 
         self.assertRegex(
             readme,
@@ -401,6 +404,22 @@ class LearningMaterialsTest(unittest.TestCase):
             fence
             for fence in re.findall(r"```js\n(.*?)```", retry, re.DOTALL)
             if "async function retry" in fence
+        )
+        retryable_function = re.search(
+            r"function retryable\(error\) \{(.*?)\n\}", retry_example, re.DOTALL
+        )
+        self.assertIsNotNone(retryable_function, "missing retry classifier")
+        classifier = retryable_function.group(1)
+        self.assertIn('error?.name === "AbortError") return false', classifier)
+        self.assertIn(
+            '["ECONNRESET", "ETIMEDOUT", "EAI_AGAIN"].includes(error?.code)) return true',
+            classifier,
+        )
+        self.assertIn("error?.status === 429", classifier)
+        self.assertIn("error?.status >= 500 && error?.status < 600", classifier)
+        self.assertRegex(
+            retry_example,
+            re.compile(r"for \(let attempt = 1; attempt <= attempts; attempt \+= 1\)"),
         )
         attempt_start = retry_example.index("for (let attempt")
         abort_check = retry_example.index("signal?.throwIfAborted()")
@@ -451,6 +470,15 @@ class LearningMaterialsTest(unittest.TestCase):
         )
         self.assertNotIn("05-misc/nodejs/README.md", root_readme)
         self.assertNotIn("05-misc/python-vs-nodejs.md", root_readme)
+        for text in (root_readme, interviews_index):
+            self.assertNotRegex(
+                text,
+                re.compile(r"\[[^\]]*Node[^\]]*\]\([^)]*05-misc/nodejs/README\.md\)"),
+            )
+            self.assertNotRegex(
+                text,
+                re.compile(r"\[Python vs NodeJS\]\([^)]*05-misc/python-vs-nodejs\.md\)"),
+            )
 
 
 if __name__ == "__main__":
