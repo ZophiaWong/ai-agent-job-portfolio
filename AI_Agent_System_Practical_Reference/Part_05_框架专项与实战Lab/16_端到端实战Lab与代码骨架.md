@@ -93,6 +93,7 @@ from typing import Literal, TypedDict
 class Action(TypedDict):
     kind: Literal["create_ticket", "send_notification"]
     tenant_id: str
+    business_action_id: str
     business_object_id: str
     arguments: dict
 
@@ -105,12 +106,13 @@ class AgentState(TypedDict, total=False):
     proposed: Action
     approved: Action
     decision: Literal["pending", "approved", "rejected"]
-    executed: bool
+    executed: bool | None
     execution_status: Literal[
         "not_started", "success", "failed", "cancelled", "unknown"
     ]
     tool_result: dict
     final_answer: str
+    validation_error: str
 ```
 
 `proposed` 是模型或规则产生的候选动作。`approved` 是用户确认、可能编辑后又通过校验的参数快照。`executed` 只有在副作用发生且结果可验证时才为 true。审批不等于执行。
@@ -163,21 +165,53 @@ def approval_node(state: AgentState) -> dict:
         }
     )
 
-    if review["decision"] == "reject":
+    if not isinstance(review, dict):
+        return {
+            "decision": "pending",
+            "executed": False,
+            "execution_status": "not_started",
+            "validation_error": "review payload must be an object",
+        }
+
+    decision = review.get("decision")
+    if decision == "reject":
         return {
             "decision": "rejected",
             "executed": False,
             "execution_status": "cancelled",
         }
 
-    candidate = review.get("action", state["proposed"])
-    approved = validate_action(candidate, allowlist=ACTION_ALLOWLIST, schema=Action)
-    return {"approved": approved, "decision": "approved", "executed": False}
+    if decision not in {"approve", "edit"}:
+        return {
+            "decision": "pending",
+            "executed": False,
+            "execution_status": "not_started",
+            "validation_error": "decision must be approve, edit, or reject",
+        }
+
+    candidate = state["proposed"] if decision == "approve" else review.get("action")
+    if not isinstance(candidate, dict):
+        return {
+            "decision": "pending",
+            "executed": False,
+            "execution_status": "not_started",
+            "validation_error": "edit requires an action object",
+        }
+
+    validation = validate_action(candidate, allowlist=ACTION_ALLOWLIST, schema=Action)
+    if not validation.ok:
+        return {
+            "decision": "pending",
+            "executed": False,
+            "execution_status": "not_started",
+            "validation_error": validation.error,
+        }
+    return {"approved": validation.value, "decision": "approved", "executed": False}
 ```
 
 `interrupt()` 会保存 checkpoint 并暂停；恢复后节点从头重新执行。interrupt() 前不要放不可重复副作用；无法移走时必须让副作用幂等，并保存可查询的执行结果。payload 要能 JSON 序列化。
 
-审批人编辑后的 action 重新走 allowlist 和 schema。校验在任何副作用之前完成，执行节点再防御性校验一次。
+空值、`cancel`、拼写错误和未知 decision 都保持 pending，并返回验证错误。只有显式的 `approve` 或 `edit` 能走到 approved。审批人编辑后的 action 重新走 allowlist 和 schema；校验在任何副作用之前完成，执行节点再防御性校验一次。conditional edge 发现 `validation_error` 后回到审批节点，下一次 node invocation 再调用 `interrupt()`，不在同一次调用里写循环。
 
 ### 恢复接口的核心调用
 
@@ -186,12 +220,17 @@ from langgraph.types import Command
 
 config = {"configurable": {"thread_id": "tenant-7:action-request-42"}}
 
-paused = graph.invoke({"proposed": action, "decision": "pending"}, config=config)
+async def run_approval_roundtrip(graph, action, edited_action):
+    paused = await graph.ainvoke(
+        {"proposed": action, "decision": "pending"},
+        config=config,
+    )
 
-resumed = graph.invoke(
-    Command(resume={"decision": "approve", "action": edited_action}),
-    config=config,
-)
+    resumed = await graph.ainvoke(
+        Command(resume={"decision": "edit", "action": edited_action}),
+        config=config,
+    )
+    return paused, resumed
 ```
 
 实际 API 还要验证审批人、审批是否过期、approval id 与 thread 的绑定，并防止重复 resume。只在数据库里把状态改成 approved，不会让图自动继续。
@@ -207,7 +246,8 @@ def action_key(action: Action) -> str:
         action["arguments"], sort_keys=True, separators=(",", ":"), ensure_ascii=False
     )
     stable_business_identity = (
-        f"{action['tenant_id']}:{action['kind']}:{action['business_object_id']}"
+        f"{action['tenant_id']}:{action['kind']}:"
+        f"{action['business_object_id']}:{action['business_action_id']}"
     )
     digest = hashlib.sha256(normalized_arguments.encode("utf-8")).hexdigest()
     return f"{stable_business_identity}:{digest}"
@@ -216,20 +256,42 @@ async def execute_action_node(state: AgentState) -> dict:
     if state.get("decision") != "approved":
         return {"executed": False, "execution_status": "cancelled"}
 
-    action = validate_action(state["approved"], allowlist=ACTION_ALLOWLIST, schema=Action)
-    result = await tool_gateway.execute(action, idempotency_key=action_key(action))
-    if not tool_gateway.verify_outcome(action, result):
+    validation = validate_action(state["approved"], allowlist=ACTION_ALLOWLIST, schema=Action)
+    if not validation.ok:
+        return {
+            "executed": False,
+            "execution_status": "failed",
+            "validation_error": validation.error,
+        }
+    action = validation.value
+    key = action_key(action)
+    try:
+        result = await tool_gateway.execute(action, idempotency_key=key)
+    except (TimeoutError, ConnectionError):
+        result = None
+
+    outcome = tool_gateway.classify_outcome(action, result)
+    if outcome == "unknown":
+        result = await tool_gateway.lookup(
+            idempotency_key=key,
+            business_object_id=action["business_object_id"],
+        )
+        outcome = tool_gateway.classify_outcome(action, result)
+
+    if outcome == "success":
+        return {"executed": True, "execution_status": "success", "tool_result": result}
+    if outcome == "failure":
         return {
             "executed": False,
             "execution_status": "failed",
             "tool_result": result,
         }
-    return {"executed": True, "execution_status": "success", "tool_result": result}
+    return {"executed": None, "execution_status": "unknown", "tool_result": result}
 ```
 
-键由稳定业务标识和规范化动作参数生成，并由数据库唯一约束保护。`task_id:tool_name` 不足，会让同一任务里的不同动作碰撞；仅使用随机 request id 又无法识别业务重放。
+键由稳定业务标识和规范化动作参数生成，并由数据库唯一约束保护。`business_object_id` 是动作针对的稳定对象，`business_action_id` 是业务上这一独立动作的身份；业务 ID 不是随机请求 ID，也不能在重试时重建。这样同一对象上的两次同参动作不会碰撞。`task_id:tool_name` 不足，会让同一任务里的不同动作碰撞；仅使用随机 request id 又无法识别业务重放。
 
-只有工具结果经过验证才能记录 `success`。如果请求超时而服务端结果未知，应先查幂等记录或业务对象，不要直接重试，也不要写 success。拒绝、取消和失败各自保留终态。
+结果分成 verified success、verified failure 和 unknown。请求超时或响应丢失时，先按幂等键和业务对象查询；仍然无法确认，就写 `execution_status="unknown"`、`executed=None`。只有确定性失败证据才能写 `failed`，成功也必须有经过验证的 outcome。拒绝和取消保留自己的终态。
 
 ## 9. 图结构
 
@@ -238,10 +300,12 @@ START → classify
   ├── qa → retrieve → answer → citation_check → END
   ├── readonly_tool → authorize → execute_read → verify → answer → END
   └── write_tool → propose → approval_node
+                              ├── invalid → pending + validation_error → approval_node
                               ├── rejected → END(cancelled)
                               └── approved → execute_action_node
                                                 ├── verified → END(success)
-                                                └── unknown/failed → END(failed)
+                                                ├── verified failure → END(failed)
+                                                └── unknown → END(unknown)
 ```
 
 没有一个“human_review_node 返回 pending 后继续往下走”的假暂停节点。图只会在 `interrupt()` 处停下，由 `Command(resume=...)` 恢复。
@@ -250,13 +314,13 @@ START → classify
 
 ```text
 POST /agent/tasks
-  创建业务请求，生成稳定 thread 映射，首次 invoke。
+  创建业务请求，生成稳定 thread 映射，首次 ainvoke。
 
 GET /agent/tasks/{task_id}
   返回业务状态；不暴露 checkpoint 或敏感参数。
 
 POST /agent/approvals/{approval_id}/resume
-  鉴权、检查过期与重复提交，加载同一 thread_id，调用 Command(resume=...).
+  鉴权、检查过期与重复提交，加载同一 thread_id，调用 graph.ainvoke(Command(resume=...)).
 
 GET /agent/tasks/{task_id}/events
   返回经过权限和脱敏处理的状态事件。
@@ -270,9 +334,9 @@ GET /agent/tasks/{task_id}/events
 
 1. 首次调用命中 interrupt，写工具调用计数仍为 0。
 2. 使用同一 thread_id 批准后，工具调用一次，结果验证通过才进入 success。
-3. 重复 resume 或模拟超时重试，业务对象仍只创建一次。
+3. 重复 resume 或模拟响应丢失，先查询业务对象；无法确认时状态为 unknown，不盲目重试。
 4. 编辑参数超出 allowlist/schema 时，工具不执行。
-5. reject、cancel、failed 和 success 的审计事件不同。
+5. reject、cancel、unknown、failed 和 success 的审计事件不同。
 6. 换 thread_id 不能恢复原 checkpoint，越权用户也不能 resume。
 
 只做单元测试 mock 仍不足以证明外部副作用安全。应再做带持久化 checkpointer、数据库唯一约束和假的确定性工具服务的集成测试。
