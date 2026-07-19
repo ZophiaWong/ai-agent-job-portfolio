@@ -70,7 +70,15 @@ function handleRequest(id) {
 3. cache 防泄漏的基本策略是什么？
    答：设置容量、TTL、淘汰策略，并避免用请求对象当长期 key。
 
+## 可执行证据
+
+按[统一练习协议](../../practice-protocol.md)执行 `startJob` 后调用 `stopJob`，检查 timer 是否从集合删除；再运行
+listener cleanup。若无 Node，手动检查每个 timer/listener/stream 的创建、取消和 close/error 路径。
+可检查结果：资源生命周期表，明确每项资源的释放动作和验证观察。
+
 ## 参考链接
 
 - [EventEmitter](https://nodejs.org/api/events.html)
 - [Node.js Diagnostics: Memory](https://nodejs.org/en/learn/diagnostics/memory)
+
+访问日期：2026-07-19。

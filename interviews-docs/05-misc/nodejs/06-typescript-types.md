@@ -62,7 +62,15 @@ const value = pluck({ id: 1, name: "rag" }, "name");
 3. 结构化类型是什么意思？
    答：只要对象形状兼容就可赋值，不要求显式继承。
 
+## 可执行证据
+
+按[统一练习协议](../../practice-protocol.md)对 `ToolResult` 增加一个未收窄就读取 `text` 的分支并运行
+`tsc --noEmit`，确认产生诊断。若无 Node，手动检查每个 union 分支是否先以 `result.ok` 收窄。
+可检查结果：TypeScript 诊断或包含成功/失败两分支的 narrowing 检查表。
+
 ## 参考链接
 
 - [TypeScript Narrowing](https://www.typescriptlang.org/docs/handbook/2/narrowing.html)
 - [TypeScript Generics](https://www.typescriptlang.org/docs/handbook/2/generics.html)
+
+访问日期：2026-07-19。

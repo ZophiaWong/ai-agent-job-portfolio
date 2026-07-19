@@ -69,7 +69,15 @@ function writeMany(writable, chunks) {
 3. 为什么推荐 `pipeline`？
    答：它统一处理流连接、错误传播和资源销毁。
 
+## 可执行证据
+
+按[统一练习协议](../../practice-protocol.md)用小输入运行 `pipeline` 示例并确认生成 `copy.log`；同时让
+`write()` 一次返回 false。若无 Node，手动 trace `write=false → once("drain") → 继续写 → end`。
+可检查结果：`copy.log` 内容或这条 backpressure 状态转换记录。
+
 ## 参考链接
 
 - [Node.js Streams](https://nodejs.org/api/stream.html)
 - [Backpressuring in Streams](https://nodejs.org/en/learn/modules/backpressuring-in-streams)
+
+访问日期：2026-07-19。

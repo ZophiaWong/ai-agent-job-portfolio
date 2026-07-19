@@ -63,7 +63,15 @@ parentPort.postMessage(result);
 3. 为什么传大对象给 worker 可能不划算？
    答：结构化克隆或 IPC 序列化成本可能抵消并行收益。
 
+## 可执行证据
+
+按[统一练习协议](../../practice-protocol.md)运行 main/worker 示例并记录 `message` 与 `error` 两条事件路径。
+若无 Node，手动检查任务是否 CPU-bound、数据是否需结构化克隆，以及 child process 是否因隔离需求胜出。
+可检查结果：worker、child process 或主线程三选一及通信/隔离理由。
+
 ## 参考链接
 
 - [worker_threads](https://nodejs.org/api/worker_threads.html)
 - [child_process](https://nodejs.org/api/child_process.html)
+
+访问日期：2026-07-19。

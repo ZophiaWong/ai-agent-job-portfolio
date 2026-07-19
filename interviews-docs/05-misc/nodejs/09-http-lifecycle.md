@@ -68,7 +68,15 @@ async function readBody(req) {
 3. headers sent 后错误处理有什么限制？
    答：通常不能再修改状态码和响应头，只能结束或销毁连接。
 
+## 可执行证据
+
+按[统一练习协议](../../practice-protocol.md)运行 server 后以 `curl -i http://localhost:3000/health` 和未知路径检查
+200/404 响应。若无 Node，手动 trace headers、body stream、路由、response headers sent 和结束连接的顺序。
+可检查结果：两段 HTTP 响应或请求生命周期 trace，并标出状态码最后可改写的位置。
+
 ## 参考链接
 
 - [Node.js HTTP](https://nodejs.org/api/http.html)
 - [Anatomy of an HTTP Transaction](https://nodejs.org/en/learn/modules/anatomy-of-an-http-transaction)
+
+访问日期：2026-07-19。

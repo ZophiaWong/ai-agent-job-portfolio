@@ -67,6 +67,12 @@ app.get("/health", {
 3. NestJS 适合什么场景？
    答：模块多、依赖复杂、团队需要统一架构约束的中大型服务。
 
+## 可执行证据
+
+按[统一练习协议](../../practice-protocol.md)在 Express 5 项目中让返回的 handler Promise reject，并确认错误 middleware
+收到 `next(value)`；不要把该结果套用到 Express 4。若无 Node，手动检查框架版本、返回 Promise 是否留在链路中，
+以及 error middleware 是否在路由后注册。可检查结果：版本限定的错误传播 trace 或检查清单。
+
 ## 参考链接
 
 - [Express 5 Error Handling](https://expressjs.com/en/guide/error-handling/)
