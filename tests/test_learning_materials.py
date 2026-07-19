@@ -132,6 +132,14 @@ class LearningMaterialsTest(unittest.TestCase):
             survey,
             re.compile(r"不是.*当前.*中国大陆.*初中级.*基线", re.DOTALL),
         )
+        self.assertNotIn("中文语境求职为主，英文岗位为辅", survey)
+        self.assertRegex(
+            survey,
+            re.compile(
+                r"目标解读语境.*中国大陆.*"
+                r"实际样本.*国际公司.*英文\s*JD.*为主"
+            ),
+        )
 
         for score in ("96", "94", "93", "91", "88", "86", "84", "82", "80", "79"):
             with self.subTest(score=score):
@@ -170,6 +178,26 @@ class LearningMaterialsTest(unittest.TestCase):
             if number != "0"
         ]
         self.assertEqual(top_level_numbers, list(range(1, len(top_level_numbers) + 1)))
+
+    def test_system_design_chapter_requires_cold_evidence_before_reference(self):
+        text = SYSTEM_DESIGN.read_text(encoding="utf-8")
+        marker = "<!-- 系统设计参考分隔线：先作答，再继续 -->"
+
+        self.assertRegex(text, re.compile(r"主要能力.*C09\.01"))
+        self.assertIn(marker, text)
+        cold_zone, reference_zone = text.split(marker, maxsplit=1)
+        self.assertRegex(cold_zone, re.compile(r"冷启动.*系统设计题"))
+        self.assertIn("cold-system-design.md", cold_zone)
+        self.assertIn("changed-constraint.md", cold_zone)
+        self.assertIn("delayed-system-design.md", cold_zone)
+        self.assertRegex(cold_zone, re.compile(r"改变约束|约束改变"))
+        self.assertRegex(cold_zone, re.compile(r"延迟复测"))
+        self.assertRegex(
+            cold_zone,
+            re.compile(r"阅读.*参考区.*勾选.*不算.*证据", re.DOTALL),
+        )
+        self.assertIn("项目模板一：企业知识库 RAG Agent", reference_zone)
+        self.assertLess(text.index(marker), text.index("项目模板一"))
 
     def test_question_bank_hides_answers_until_after_cold_attempt(self):
         text = QUESTION_BANK.read_text(encoding="utf-8")
@@ -211,10 +239,31 @@ class LearningMaterialsTest(unittest.TestCase):
             with self.subTest(artifact_type=artifact_type):
                 self.assertIn(artifact_type, text)
 
-        public_route_files = [HANDBOOK, SURVEY, CAPABILITY_MATRIX, SYSTEM_DESIGN, QUESTION_BANK, EVIDENCE_ROUTE]
-        public_route_files.extend(ROLE_PATHS.glob("*.md"))
-        joined = "\n".join(path.read_text(encoding="utf-8") for path in public_route_files if path.exists())
-        self.assertNotRegex(joined, re.compile(r"(?:7|七)\s*天(?:学习|阅读|复习)?(?:计划|建议|路线)"))
+        historical_records = {REFERENCE_ROOT / "CHANGELOG.md"}
+        public_route_files = sorted(
+            path
+            for path in REFERENCE_ROOT.rglob("*.md")
+            if path not in historical_records
+        )
+        for path in public_route_files:
+            with self.subTest(route_file=path.relative_to(REFERENCE_ROOT)):
+                public_text = path.read_text(encoding="utf-8")
+                self.assertNotRegex(
+                    public_text,
+                    re.compile(
+                        r"(?:\d+|[一二三四五六七八九十]+)\s*天"
+                        r"(?:学习|阅读|复习)?(?:计划|建议|路线)"
+                    ),
+                )
+                sequential_day_headings = re.findall(
+                    r"(?mi)^#{2,4}\s*(?:Day\s*\d+|第\s*\d+\s*天)",
+                    public_text,
+                )
+                self.assertLess(
+                    len(sequential_day_headings),
+                    2,
+                    f"sequential public day route in {path}",
+                )
 
     def test_dsa_practice_lane_has_navigation_and_executable_evidence(self):
         readme = (DSA_DIR / "README.md").read_text(encoding="utf-8")
