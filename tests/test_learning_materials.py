@@ -12,6 +12,33 @@ HANDBOOK = (
     / "AI_Agent_System_Practical_Reference"
     / "00_README_学习路线与资料使用说明.md"
 )
+REFERENCE_ROOT = REPO_ROOT / "AI_Agent_System_Practical_Reference"
+ROLE_PATHS = REFERENCE_ROOT / "role_paths"
+SURVEY = (
+    REFERENCE_ROOT
+    / "00_岗位调研与能力画像"
+    / "01_AI_Agent应用岗位招聘调研报告.md"
+)
+CAPABILITY_MATRIX = (
+    REFERENCE_ROOT
+    / "00_岗位调研与能力画像"
+    / "02_岗位核心能力矩阵.md"
+)
+SYSTEM_DESIGN = (
+    REFERENCE_ROOT
+    / "Part_04_项目与面试表达"
+    / "11_项目设计模板与架构表达.md"
+)
+QUESTION_BANK = (
+    REFERENCE_ROOT
+    / "Part_04_项目与面试表达"
+    / "12_高频面试题与答题闭环.md"
+)
+EVIDENCE_ROUTE = (
+    REFERENCE_ROOT
+    / "Part_04_项目与面试表达"
+    / "13_总复习Checklist与学习计划.md"
+)
 PLACEHOLDER_INDEXES = [
     REPO_ROOT / "interviews-docs" / "01-AI" / "README.md",
     REPO_ROOT / "interviews-docs" / "02-后端" / "README.md",
@@ -88,8 +115,106 @@ class LearningMaterialsTest(unittest.TestCase):
                     text,
                     re.compile(rf"\[[^\]]*{chapter:02d}[^\]]*\]\([^)]+\)"),
                 )
-        self.assertRegex(text, re.compile(r"\[[^\]]*RAG[^\]]*\]\([^)]+\)"))
-        self.assertRegex(text, re.compile(r"\[[^\]]*LangGraph[^\]]*\]\([^)]+\)"))
+        self.assertIn("[JD 差异层与实用入口](role_paths/README.md)", text)
+
+    def test_handbook_uses_one_canonical_competency_route(self):
+        handbook = HANDBOOK.read_text(encoding="utf-8")
+        survey = SURVEY.read_text(encoding="utf-8")
+        matrix = CAPABILITY_MATRIX.read_text(encoding="utf-8")
+
+        self.assertRegex(handbook, re.compile(r"按.*(?:能力缺口|缺口能力).*查阅"))
+        self.assertNotRegex(handbook, re.compile(r"按\s*Part\s*01\s*[→到-]\s*Part\s*05.*顺序读"))
+        self.assertIn(".codex/skills/interview-prep-coach/references/competency-model.md", handbook)
+
+        self.assertRegex(survey, re.compile(r"2026-04-29.*历史.*快照", re.DOTALL))
+        self.assertRegex(survey, re.compile(r"国际.*中高级|中高级.*国际"))
+        self.assertRegex(
+            survey,
+            re.compile(r"不是.*当前.*中国大陆.*初中级.*基线", re.DOTALL),
+        )
+
+        for score in ("96", "94", "93", "91", "88", "86", "84", "82", "80", "79"):
+            with self.subTest(score=score):
+                self.assertNotRegex(matrix, re.compile(rf"(?<!\d){score}(?!\d)"))
+        self.assertIn("C01–C13", matrix)
+        self.assertIn("competency-model.md", matrix)
+        self.assertRegex(matrix, re.compile(r"稳定\s*ID"))
+        self.assertRegex(matrix, re.compile(r"JD.*覆盖|覆盖.*JD"))
+
+        obsolete_routes = (
+            CAPABILITY_MATRIX.with_name("03_章节重要性映射表.md"),
+            CAPABILITY_MATRIX.with_name("04_学习优先级建议.md"),
+        )
+        for path in obsolete_routes:
+            with self.subTest(path=path.name):
+                self.assertFalse(path.exists(), f"stale route remains: {path.name}")
+
+        self.assertEqual(
+            sorted(path.name for path in ROLE_PATHS.glob("*.md")),
+            ["README.md"],
+        )
+        role_index = (ROLE_PATHS / "README.md").read_text(encoding="utf-8")
+        self.assertIn("C01–C13", role_index)
+        self.assertRegex(role_index, re.compile(r"JD.*覆盖|覆盖.*JD"))
+        self.assertIn("../Part_04_项目与面试表达/13_总复习Checklist与学习计划.md", role_index)
+
+    def test_generic_system_designs_are_truth_safe_exercises(self):
+        text = SYSTEM_DESIGN.read_text(encoding="utf-8")
+
+        self.assertRegex(text, re.compile(r"通用设计.*(?:练习|提案)"))
+        self.assertRegex(text, re.compile(r"不代表.*(?:已实现|真实项目)"))
+        self.assertNotRegex(text, re.compile(r"我(?:设计并实现|做了|做的|加入了|实现了)"))
+        top_level_numbers = [
+            int(number)
+            for number in re.findall(r"(?m)^## (\d+)\.", text)
+            if number != "0"
+        ]
+        self.assertEqual(top_level_numbers, list(range(1, len(top_level_numbers) + 1)))
+
+    def test_question_bank_hides_answers_until_after_cold_attempt(self):
+        text = QUESTION_BANK.read_text(encoding="utf-8")
+        marker = "<!-- 冷答分隔线：先作答，再继续 -->"
+        answer_heading = "## 3. 参考答案与评分"
+
+        self.assertIn(marker, text)
+        self.assertIn(answer_heading, text)
+        questions, answers = text.split(marker, maxsplit=1)
+        self.assertGreaterEqual(len(re.findall(r"(?m)^### Q\d+：", questions)), 20)
+        self.assertNotIn("推荐回答", questions)
+        self.assertNotRegex(questions, re.compile(r"参考答案|评分标准|评分要点"))
+        self.assertIn("<details>", answers)
+        self.assertIn("评分要点", answers)
+        self.assertNotRegex(text, re.compile(r"(?:看|读)(?:完|过).{0,12}答案.{0,12}(?:就是|算作|作为).{0,12}证据"))
+
+    def test_chapter_13_is_the_only_public_two_to_three_week_evidence_route(self):
+        text = EVIDENCE_ROUTE.read_text(encoding="utf-8")
+        route_heading = re.compile(r"(?m)^## \d+\. 2–3 周.*证据路线$")
+
+        self.assertEqual(len(route_heading.findall(text)), 1)
+        for competency in range(1, 14):
+            with self.subTest(competency=competency):
+                self.assertRegex(text, re.compile(rf"\bC{competency:02d}\b"))
+        self.assertRegex(text, re.compile(r"每个学习日.*可检查产物"))
+        self.assertRegex(text, re.compile(r"私人.*\.local/interview-prep/.*日程", re.DOTALL))
+
+        week_blocks = re.findall(
+            r"(?ms)^### 第[123]周.*?(?=^### 第[123]周|^## |\Z)",
+            text,
+        )
+        self.assertGreaterEqual(len(week_blocks), 2)
+        for block in week_blocks:
+            with self.subTest(week=block.splitlines()[0]):
+                self.assertIn("可检查产物", block)
+                self.assertRegex(block, re.compile(r"`[^`]+\.(?:py|md|json|txt|sql)`"))
+
+        for artifact_type in ("代码", "设计", "冷答", "项目", "模拟"):
+            with self.subTest(artifact_type=artifact_type):
+                self.assertIn(artifact_type, text)
+
+        public_route_files = [HANDBOOK, SURVEY, CAPABILITY_MATRIX, SYSTEM_DESIGN, QUESTION_BANK, EVIDENCE_ROUTE]
+        public_route_files.extend(ROLE_PATHS.glob("*.md"))
+        joined = "\n".join(path.read_text(encoding="utf-8") for path in public_route_files if path.exists())
+        self.assertNotRegex(joined, re.compile(r"(?:7|七)\s*天(?:学习|阅读|复习)?(?:计划|建议|路线)"))
 
     def test_dsa_practice_lane_has_navigation_and_executable_evidence(self):
         readme = (DSA_DIR / "README.md").read_text(encoding="utf-8")

@@ -1,13 +1,12 @@
-# AI Agent 应用岗位招聘调研报告
+# AI Agent 应用岗位招聘调研（历史快照）
 
-> 生成日期：2026-04-29  
-> 资料定位：AI Agent 应用岗位的系统学习 + 工程实战参考资料。  
-> 来源基础：用户指定 GitHub 目录、公开 JD 调研、官方框架文档与经典论文。  
-> 注意：招聘信息会变化，岗位调研用于能力画像，不代表某公司当前仍在招聘。
+> 2026-04-29 历史调研快照，保留当时的公开 JD 样本与观察。
+> 样本以国际岗位为主，且中高级岗位明显偏多。
+> 它不是当前中国大陆初中级候选人的岗位基线，也不证明这些公司仍在招聘。
 
 ## 1. 调研目标
 
-本报告用于回答：市场上的 AI Agent 应用岗位到底需要哪些能力，以及这些能力如何映射到后续学习资料。调研范围聚焦“应用开发 / Agent 工程 / RAG 工程 / AI 后端 / LLMOps”，不以纯算法研究、模型预训练、CV/NLP 传统算法岗为主。
+这份快照记录当时公开样本中出现的应用开发、Agent 工程、RAG、AI 后端和 LLMOps 要求。它可以帮助理解能力词汇，不用来推断 2026-04-29 之后的招聘市场。
 
 ## 2. 调研方法
 
@@ -15,7 +14,8 @@
 - 语言范围：中文语境求职为主，英文岗位为辅，用于校准国际市场对 Agentic Workflow、RAG、Tool Use、Evaluation、Observability 的要求。
 - 样本口径：公开 JD 页面、公司招聘页、Greenhouse/Ashby/Workable 等公开页面，以及可访问搜索摘要。
 - 样本数量：25 条公开岗位样本。
-- 限制说明：部分招聘平台存在登录、反爬或过期问题，因此本报告只把样本用于能力画像，不把岗位状态视为实时招聘承诺。
+- 样本偏差：25 条中国际公司和英文 JD 占多数，Senior、Architect、Head 等中高级岗位也较多。
+- 时效边界：部分链接可能过期或需要登录，表格是历史记录，不是实时岗位清单。
 
 ## 3. 样本岗位清单
 
@@ -47,41 +47,41 @@
 | 24 | CodeRoad | QA Analyst (AI Systems) | Agent evaluation、Python scripts、RAG instances、Success Rate、Tool Use Accuracy、Planning Quality、Autonomy | https://job-boards.greenhouse.io/coderoad/jobs/4205541009 |
 | 25 | Citi | Senior Data Scientist / Gen AI Engineer | LangGraph、CrewAI、AutoGen、tool-use/function-calling、multi-agent orchestration | https://jobs.citi.com/job/pune/senior-data-scientist-gen-ai-engineer-assistant-vice-president/287/94492649152 |
 
-## 4. 高频能力观察
+## 4. 这组样本中的能力观察
 
-### 4.1 RAG 与知识库工程仍然是最高频能力
+### 4.1 RAG 与知识库工程反复出现
 
-公开 JD 中大量出现 RAG pipeline、vector search、semantic chunking、rerankers、retrieval systems、hybrid search、metadata filtering、Knowledge Banks 等词。这说明应用岗位并不是只需要会调大模型 API，而是要能把企业私有知识、外部数据源和模型输出稳定连接起来。
+样本里反复出现 RAG pipeline、vector search、semantic chunking、rerankers、hybrid search、metadata filtering 和 Knowledge Banks。这些 JD 关心的是知识接入与检索链路，不只是模型 API 调用。
 
 工程上，RAG 的岗位价值不只在“检索一段文本”，而在：文档解析、切块、索引、召回、重排、上下文组装、引用验证、评测回流、索引版本治理。
 
-### 4.2 Agent Workflow、状态机和框架能力明显上升
+### 4.2 状态化 Workflow 在样本中很常见
 
-LangGraph、LangChain、CrewAI、AutoGen、custom orchestration、stateful agent systems、planning loops、tool routing、multi-agent orchestration 等关键词多次出现。岗位不是要求候选人只会写 prompt，而是能把 Agent 拆成可控节点、状态、边、条件路由和终止条件。
+LangGraph、custom orchestration、stateful agent systems、planning loops、tool routing 和 multi-agent orchestration 等词多次出现。这些 JD 要求候选人能表达节点、状态、条件路由和终止条件。
 
 这也是本资料把 `工具调用` 提前到第 3 章、并新增 `LangGraph 工程实战专项` 的原因。
 
-### 4.3 Tool Use / Function Calling / MCP 是 Agent 应用的行动层
+### 4.3 多个样本提到 Tool Use / Function Calling / MCP
 
-多个 JD 提到 tool-use、function calling、API integration、MCP servers、tool schemas、tool invocation、validation、multi-step chaining。它们共同指向一个能力：让模型通过受控接口连接真实系统。
+多个 JD 提到 tool-use、function calling、API integration、MCP servers、tool schemas 和 validation。对应的练习是让模型只提议调用，由受控接口连接真实系统。
 
 面试中不能只说“模型调用工具”，而要补充服务端校验、权限、幂等、超时、重试、熔断、降级和审计。
 
-### 4.4 Python 后端工程是应用岗位落地能力的核心
+### 4.4 样本也要求 Python 后端工程
 
-样本中频繁出现 Python、async Python、Pydantic、backend services、API design、system performance、production systems。对于你的技术栈，重点不是 Java，而是 FastAPI、asyncio、任务队列、Redis、PostgreSQL、pgvector/Vector DB、日志、Trace、Docker、限流和幂等。
+样本中频繁出现 Python、async Python、Pydantic、backend services、API design 和 system performance。手册因此收录 FastAPI、asyncio、任务队列、Redis、PostgreSQL、日志、Trace、限流和幂等等主题。
 
-### 4.5 Evaluation、Observability 和 Bad Case 回流正在从加分项变成生产必备
+### 4.5 部分样本明确要求 Evaluation 和 Observability
 
-部分 JD 明确要求 evaluation pipeline、Agent evaluation、success rate、tool use accuracy、planning quality、observability、OpenTelemetry、cost/latency trade-offs。生产级 Agent 需要证明“是否真的变好”，并定位“为什么失败”。
+部分 JD 明确要求 evaluation pipeline、Agent evaluation、success rate、tool use accuracy、observability、OpenTelemetry 和 cost/latency trade-offs。这些要求对应两个问题：改动后是否更好，以及失败发生在哪一层。
 
-### 4.6 微调是加分项，不是应用岗第一优先级
+### 4.6 微调更多出现在高级和模型适配岗位中
 
-Fine-tuning、LoRA、DPO 等在部分岗位出现，但更常见于高级 AI Engineer、AI Platform、模型适配类岗位。对一般 Agent 应用开发，优先级通常是：RAG / Workflow / Tool Calling / Context / Python 后端 / Evaluation，高于微调。
+Fine-tuning、LoRA 和 DPO 在部分岗位出现，主要集中于高级 AI Engineer、AI Platform 和模型适配类样本。这份快照不足以给当前初中级岗位排一个新的优先级表。
 
 ## 5. 调研结论
 
-AI Agent 应用岗位的核心不是“会不会调用一个模型 API”，而是能否构建一个可上线的任务系统：
+这组样本通常把模型 API 放在一条更长的任务链路里：
 
 ```text
 用户目标
@@ -101,4 +101,4 @@ Tool Calling / MCP 执行动作
 持续 Bad Case 回流
 ```
 
-因此后续资料应围绕 P0 能力组织：Agent 基础、Workflow/LangGraph、Tool Calling/MCP、RAG、上下文工程、Python 后端、评测监控。微调、AutoGen、CrewAI、复杂推理方法作为进阶和选型补充。
+这些观察只解释为什么手册会收录 Workflow、Tool Calling/MCP、RAG、上下文工程、Python 后端和评测监控。当前的能力优先级以[C01–C13 核心能力模型](../../.codex/skills/interview-prep-coach/references/competency-model.md)为准；具体 JD 只做覆盖。
