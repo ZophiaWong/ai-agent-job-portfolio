@@ -26,6 +26,16 @@ OBSOLETE_FILES = [
     REPO_ROOT / "interviews-docs" / "05-misc" / "nodejs.md",
 ]
 PRACTICE_SEQUENCE = "冷启动 → 澄清约束 → 独立作答/编码 → 执行或检查 → 解释权衡 → 迁移题 → 延迟复测"
+DSA_DIR = REPO_ROOT / "interviews-docs" / "03-DS_AL"
+DSA_CHAPTERS = (
+    "01_数组与双指针.md",
+    "02_滑动窗口.md",
+    "03_链表.md",
+    "04_二叉树.md",
+    "05_动态规划.md",
+    "06_回溯与搜索.md",
+    "07_堆栈队列二分.md",
+)
 
 
 class LearningMaterialsTest(unittest.TestCase):
@@ -57,6 +67,30 @@ class LearningMaterialsTest(unittest.TestCase):
                 )
         self.assertRegex(text, re.compile(r"\[[^\]]*RAG[^\]]*\]\([^)]+\)"))
         self.assertRegex(text, re.compile(r"\[[^\]]*LangGraph[^\]]*\]\([^)]+\)"))
+
+    def test_dsa_practice_lane_has_navigation_and_executable_evidence(self):
+        readme = (DSA_DIR / "README.md").read_text(encoding="utf-8")
+        self.assertRegex(
+            readme, re.compile(r"\[统一练习协议\]\(\.\./practice-protocol\.md\)")
+        )
+        self.assertRegex(readme, re.compile(r"\[C12\.02\]\([^)]+\)"))
+        self.assertRegex(readme, re.compile(r"\[C12\.03\]\([^)]+\)"))
+
+        for chapter in DSA_CHAPTERS:
+            with self.subTest(chapter=chapter):
+                self.assertIn(f"](./{chapter})", readme)
+                text = (DSA_DIR / chapter).read_text(encoding="utf-8")
+                self.assertIn("## 可执行证据", text)
+                self.assertIn("边界 case", text)
+                self.assertIn("复杂度", text)
+
+        dp_text = (DSA_DIR / "05_动态规划.md").read_text(encoding="utf-8")
+        self.assertNotIn("def one_dim_dp", dp_text)
+        self.assertRegex(
+            dp_text,
+            re.compile(r"定义\s*`dp\[i\]`\s*表示.{0,60}最高金额", re.DOTALL),
+        )
+        self.assertRegex(dp_text, re.compile(r"dp\[i\]\s*=\s*max\("))
 
 
 if __name__ == "__main__":
