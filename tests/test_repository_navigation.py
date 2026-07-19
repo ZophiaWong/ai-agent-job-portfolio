@@ -27,7 +27,6 @@ PUBLIC_MARKDOWN_ROOTS = [
     REPO_ROOT / "README.md",
     REPO_ROOT / "AI_Agent_System_Practical_Reference",
     REPO_ROOT / "interviews-docs",
-    REPO_ROOT / "learning-materials",
     REPO_ROOT / "best-practice",
     REPO_ROOT / "projects",
     REPO_ROOT / ".codex" / "skills" / "anki-card-maker" / "references",
@@ -46,6 +45,13 @@ TASK_ONE_NAVIGATION_PAGES = [
 
 
 class RepositoryNavigationTest(unittest.TestCase):
+    def test_root_readme_uses_current_public_navigation_names(self):
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+
+        self.assertIn("[受控的 Agent 辅助开发](best-practice/README.md)", readme)
+        self.assertNotIn("vibe coding", readme.casefold())
+        self.assertNotIn("learning-materials/", readme)
+
     def test_public_entrypoints_exist(self):
         for entrypoint in ENTRYPOINTS:
             with self.subTest(entrypoint=entrypoint.relative_to(REPO_ROOT)):
