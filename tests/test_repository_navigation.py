@@ -209,6 +209,39 @@ class RepositoryNavigationTest(unittest.TestCase):
         self.assertIn(research_synthesis_url, study_text)
         self.assertIn(snapshot_tool_runtime_url, snapshot_text)
 
+    def test_forge_harness_study_units_link_to_their_pinned_source_reports(self):
+        study_text = FORGE_HARNESS_RESEARCH_STUDY_GUIDE.read_text(encoding="utf-8")
+        required_report_urls = {
+            "https://github.com/ZophiaWong/forge-harness/blob/"
+            "8fb8529b104350c36c2e1f2eecd1c40b4bb56d24/"
+            "docs/design-studies/07-agent-runtime-design-synthesis.md",
+            "https://github.com/ZophiaWong/forge-harness/blob/"
+            "8fb8529b104350c36c2e1f2eecd1c40b4bb56d24/"
+            "docs/design-studies/01-agent-loop-and-completion.md",
+            "https://github.com/ZophiaWong/forge-harness/blob/"
+            "8fb8529b104350c36c2e1f2eecd1c40b4bb56d24/"
+            "docs/design-studies/02-tool-runtime-and-action-boundary.md",
+            "https://github.com/ZophiaWong/forge-harness/blob/"
+            "8fb8529b104350c36c2e1f2eecd1c40b4bb56d24/"
+            "docs/design-studies/03-context-construction-and-compaction.md",
+            "https://github.com/ZophiaWong/forge-harness/blob/"
+            "8fb8529b104350c36c2e1f2eecd1c40b4bb56d24/"
+            "docs/design-studies/04-session-persistence-and-branching.md",
+            "https://github.com/ZophiaWong/forge-harness/blob/"
+            "8fb8529b104350c36c2e1f2eecd1c40b4bb56d24/"
+            "docs/design-studies/05-delegation-and-coordination.md",
+            "https://github.com/ZophiaWong/forge-harness/blob/"
+            "8fb8529b104350c36c2e1f2eecd1c40b4bb56d24/"
+            "docs/design-studies/06-extensibility-governance-and-trust.md",
+        }
+        unit_report_urls = re.findall(
+            r"Source report: \[[^\]]+\]\((https://github\.com/[^)]+)\)",
+            study_text,
+        )
+
+        self.assertEqual(len(unit_report_urls), 7)
+        self.assertEqual(set(unit_report_urls), required_report_urls)
+
 
 if __name__ == "__main__":
     unittest.main()
