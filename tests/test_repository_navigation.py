@@ -22,6 +22,9 @@ PROJECT_EVIDENCE_PAGES = [
     REPO_ROOT / "projects" / "meter-desk" / "README.md",
     REPO_ROOT / "projects" / "forge-harness" / "README.md",
 ]
+FORGE_HARNESS_RESEARCH_STUDY_GUIDE = (
+    REPO_ROOT / "projects" / "forge-harness" / "research-study-guide.md"
+)
 LINK_RE = re.compile(r"!?(?:\[[^\]]*\])\(([^)]+)\)")
 PUBLIC_MARKDOWN_ROOTS = [
     REPO_ROOT / "README.md",
@@ -29,6 +32,7 @@ PUBLIC_MARKDOWN_ROOTS = [
     REPO_ROOT / "interviews-docs",
     REPO_ROOT / "best-practice",
     REPO_ROOT / "projects",
+    FORGE_HARNESS_RESEARCH_STUDY_GUIDE,
     REPO_ROOT / ".codex" / "skills" / "anki-card-maker" / "references",
 ]
 TASK_ONE_NAVIGATION_PAGES = [
@@ -38,6 +42,7 @@ TASK_ONE_NAVIGATION_PAGES = [
     REPO_ROOT / "interviews-docs" / "02-后端" / "README.md",
     REPO_ROOT / "interviews-docs" / "04-career" / "README.md",
     REPO_ROOT / "best-practice" / "README.md",
+    FORGE_HARNESS_RESEARCH_STUDY_GUIDE,
     REPO_ROOT
     / "AI_Agent_System_Practical_Reference"
     / "00_README_学习路线与资料使用说明.md",
@@ -183,6 +188,14 @@ class RepositoryNavigationTest(unittest.TestCase):
                 self.assertGreaterEqual(len(claims), 3)
                 self.assertIn("implemented", claims)
                 self.assertTrue({"planned", "proposed", "unknown"} & set(claims))
+
+    def test_forge_harness_snapshot_and_research_study_are_separately_pinned(self):
+        snapshot_readme = (REPO_ROOT / "projects" / "forge-harness" / "README.md")
+        snapshot_text = snapshot_readme.read_text(encoding="utf-8")
+        study_text = FORGE_HARNESS_RESEARCH_STUDY_GUIDE.read_text(encoding="utf-8")
+
+        self.assertIn("9c1b1dbb0566", snapshot_text)
+        self.assertIn("8fb8529b104350c36c2e1f2eecd1c40b4bb56d24", study_text)
 
 
 if __name__ == "__main__":

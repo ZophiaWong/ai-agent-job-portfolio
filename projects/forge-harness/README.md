@@ -22,3 +22,8 @@ future tutorial scope and from production properties the repository does not est
 Before each project mock, compare the moving repository with this snapshot and record the refreshed
 URL, commit SHA, and access date in the session. Reclassify changed claims. Keep target architecture,
 future chapters, tutorial demonstrations, and production behavior distinct.
+
+## Research study materials
+
+For study and review, use the [research study guide](research-study-guide.md). It is pinned to a
+separate frozen research commit and does not alter any snapshot claims above.
