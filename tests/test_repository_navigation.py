@@ -197,7 +197,7 @@ class RepositoryNavigationTest(unittest.TestCase):
         research_sha = "8fb8529b104350c36c2e1f2eecd1c40b4bb56d24"
         snapshot_sha = "9c1b1dbb0566e9053457db50e64cd374848de856"
         research_synthesis_url = (
-            "https://github.com/research/agent-runtime-design-studies/blob/"
+            "https://github.com/ZophiaWong/forge-harness/blob/"
             f"{research_sha}/docs/design-studies/07-agent-runtime-design-synthesis.md"
         )
         snapshot_tool_runtime_url = (
