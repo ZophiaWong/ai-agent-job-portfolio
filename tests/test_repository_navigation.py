@@ -194,8 +194,20 @@ class RepositoryNavigationTest(unittest.TestCase):
         snapshot_text = snapshot_readme.read_text(encoding="utf-8")
         study_text = FORGE_HARNESS_RESEARCH_STUDY_GUIDE.read_text(encoding="utf-8")
 
-        self.assertIn("9c1b1dbb0566", snapshot_text)
-        self.assertIn("8fb8529b104350c36c2e1f2eecd1c40b4bb56d24", study_text)
+        research_sha = "8fb8529b104350c36c2e1f2eecd1c40b4bb56d24"
+        snapshot_sha = "9c1b1dbb0566e9053457db50e64cd374848de856"
+        research_synthesis_url = (
+            "https://github.com/research/agent-runtime-design-studies/blob/"
+            f"{research_sha}/docs/design-studies/07-agent-runtime-design-synthesis.md"
+        )
+        snapshot_tool_runtime_url = (
+            "https://github.com/ZophiaWong/forge-harness/blob/"
+            f"{snapshot_sha}/test/tools/toolRuntime.test.ts"
+        )
+
+        self.assertNotEqual(research_sha, snapshot_sha)
+        self.assertIn(research_synthesis_url, study_text)
+        self.assertIn(snapshot_tool_runtime_url, snapshot_text)
 
 
 if __name__ == "__main__":
