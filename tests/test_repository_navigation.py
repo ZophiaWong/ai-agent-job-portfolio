@@ -22,6 +22,9 @@ PROJECT_EVIDENCE_PAGES = [
     REPO_ROOT / "projects" / "meter-desk" / "README.md",
     REPO_ROOT / "projects" / "forge-harness" / "README.md",
 ]
+FORGE_HARNESS_RESEARCH_STUDY_GUIDE = (
+    REPO_ROOT / "projects" / "forge-harness" / "research-study-guide.md"
+)
 LINK_RE = re.compile(r"!?(?:\[[^\]]*\])\(([^)]+)\)")
 PUBLIC_MARKDOWN_ROOTS = [
     REPO_ROOT / "README.md",
@@ -29,6 +32,7 @@ PUBLIC_MARKDOWN_ROOTS = [
     REPO_ROOT / "interviews-docs",
     REPO_ROOT / "best-practice",
     REPO_ROOT / "projects",
+    FORGE_HARNESS_RESEARCH_STUDY_GUIDE,
     REPO_ROOT / ".codex" / "skills" / "anki-card-maker" / "references",
 ]
 TASK_ONE_NAVIGATION_PAGES = [
@@ -38,6 +42,7 @@ TASK_ONE_NAVIGATION_PAGES = [
     REPO_ROOT / "interviews-docs" / "02-后端" / "README.md",
     REPO_ROOT / "interviews-docs" / "04-career" / "README.md",
     REPO_ROOT / "best-practice" / "README.md",
+    FORGE_HARNESS_RESEARCH_STUDY_GUIDE,
     REPO_ROOT
     / "AI_Agent_System_Practical_Reference"
     / "00_README_学习路线与资料使用说明.md",
@@ -183,6 +188,59 @@ class RepositoryNavigationTest(unittest.TestCase):
                 self.assertGreaterEqual(len(claims), 3)
                 self.assertIn("implemented", claims)
                 self.assertTrue({"planned", "proposed", "unknown"} & set(claims))
+
+    def test_forge_harness_snapshot_and_research_study_are_separately_pinned(self):
+        snapshot_readme = (REPO_ROOT / "projects" / "forge-harness" / "README.md")
+        snapshot_text = snapshot_readme.read_text(encoding="utf-8")
+        study_text = FORGE_HARNESS_RESEARCH_STUDY_GUIDE.read_text(encoding="utf-8")
+
+        research_sha = "8fb8529b104350c36c2e1f2eecd1c40b4bb56d24"
+        snapshot_sha = "9c1b1dbb0566e9053457db50e64cd374848de856"
+        research_synthesis_url = (
+            "https://github.com/ZophiaWong/forge-harness/blob/"
+            f"{research_sha}/docs/design-studies/07-agent-runtime-design-synthesis.md"
+        )
+        snapshot_tool_runtime_url = (
+            "https://github.com/ZophiaWong/forge-harness/blob/"
+            f"{snapshot_sha}/test/tools/toolRuntime.test.ts"
+        )
+
+        self.assertNotEqual(research_sha, snapshot_sha)
+        self.assertIn(research_synthesis_url, study_text)
+        self.assertIn(snapshot_tool_runtime_url, snapshot_text)
+
+    def test_forge_harness_study_units_link_to_their_pinned_source_reports(self):
+        study_text = FORGE_HARNESS_RESEARCH_STUDY_GUIDE.read_text(encoding="utf-8")
+        required_report_urls = {
+            "https://github.com/ZophiaWong/forge-harness/blob/"
+            "8fb8529b104350c36c2e1f2eecd1c40b4bb56d24/"
+            "docs/design-studies/07-agent-runtime-design-synthesis.md",
+            "https://github.com/ZophiaWong/forge-harness/blob/"
+            "8fb8529b104350c36c2e1f2eecd1c40b4bb56d24/"
+            "docs/design-studies/01-agent-loop-and-completion.md",
+            "https://github.com/ZophiaWong/forge-harness/blob/"
+            "8fb8529b104350c36c2e1f2eecd1c40b4bb56d24/"
+            "docs/design-studies/02-tool-runtime-and-action-boundary.md",
+            "https://github.com/ZophiaWong/forge-harness/blob/"
+            "8fb8529b104350c36c2e1f2eecd1c40b4bb56d24/"
+            "docs/design-studies/03-context-construction-and-compaction.md",
+            "https://github.com/ZophiaWong/forge-harness/blob/"
+            "8fb8529b104350c36c2e1f2eecd1c40b4bb56d24/"
+            "docs/design-studies/04-session-persistence-and-branching.md",
+            "https://github.com/ZophiaWong/forge-harness/blob/"
+            "8fb8529b104350c36c2e1f2eecd1c40b4bb56d24/"
+            "docs/design-studies/05-delegation-and-coordination.md",
+            "https://github.com/ZophiaWong/forge-harness/blob/"
+            "8fb8529b104350c36c2e1f2eecd1c40b4bb56d24/"
+            "docs/design-studies/06-extensibility-governance-and-trust.md",
+        }
+        unit_report_urls = re.findall(
+            r"Source report: \[[^\]]+\]\((https://github\.com/[^)]+)\)",
+            study_text,
+        )
+
+        self.assertEqual(len(unit_report_urls), 7)
+        self.assertEqual(set(unit_report_urls), required_report_urls)
 
 
 if __name__ == "__main__":
