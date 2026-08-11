@@ -11,9 +11,9 @@ Forge Harness 是一个从零构建的 TypeScript coding-agent Runtime。它从�
 | 模式 | 命令 | 适合的场景 | 能说明什么 | 不能说明什么 |
 | --- | --- | --- | --- | --- |
 | Deterministic | `npm run demo:portfolio -- --explain` | 正式 screen-share 的主线 | 三个固定 Runtime 边界在本地可重复检查 | 真实模型会稳定选择同一条工具路径 |
-| Focused Live LLM | `npm run demo:portfolio:live` | 面试官追问后，且环境已经准备好 | 一次真实模型运行能否到达固定 fixture 的 Runtime 证据边界 | 可重复性、通用 coding 能力或生产稳定性 |
+| Focused Live LLM | `npm run demo:portfolio:live` | 受控的私下面试 screen-share，且环境已经准备好 | 一次真实模型运行能否到达固定 fixture 的 Runtime 证据边界 | 可重复性、通用 coding 能力或生产稳定性 |
 
-`demo:portfolio:live` 当前位于 Forge 的 `codex/add-recruiter-portfolio` 分支。在它合并前，不把它说成 `main` 上已经发布的能力。它不进入 CI，也不是可复用的公开证据。
+`demo:portfolio:live` 当前位于 Forge 的 `codex/add-recruiter-portfolio` 分支。在它合并前，不把它说成 `main` 上已经发布的能力。它不进入 CI，只适合受控的私下 screen-share，不能录制或作为公开证据。
 
 Compaction P0 仍然开放。公开的独立比较证据只记录了 `compaction-retention` 从 baseline 的 `3/3` 到 candidate 的 `2/3`，且这个红色 candidate 已冻结、没有为了绿色结果重新抽样。源码提交 `a0146b2` 已处理 repeated compaction 的 summary rollover，并补了连续 compaction 测试；这不是 post-fix independent comparable candidate，也不是 P0 关闭证明。
 
@@ -229,9 +229,11 @@ explain.coordination-completion task=approved gate=incomplete worktree=written f
 - 有 interactive TTY、Git、Bash、Node.js `>=20.19`。
 - Forge 根目录 `.env` 已显式配置 `OPENAI_API_KEY` 和 `OPENAI_MODEL`；可选 `OPENAI_BASE_URL` 已按 provider 要求配置。
 - 已接受本次调用可能使用网络和 provider token，也接受模型可能失败。
-- 已提前说明：这次运行不是可重复证据，失败时不会现场排查。
+- 已确认这是一次受控的私下 screen-share，不录制、不把 transcript 或截图保留为公开证据；失败时不会现场排查。
 
-不要 `cat .env`、不要共享 API key，也不要在录屏中展示绝对路径、prompt、raw Trace 或 provider error。命令读取 Forge 根目录 `.env`，并把模型过程交给现有 CLI；wrapper 的最终状态只有脱敏 reason code。
+Live child 使用 `stdio: "inherit"` 直接继承当前 terminal，因此屏幕上可能出现可变的 model/tool text、provider failure 和 Runtime path。它只能用于受控的私下 screen-share，绝不录制，也不把 transcript、截图或结果当作公开 evidence。如果出现意外的敏感值、绝对路径或错误内容，立刻停止共享或中断命令，改用 deterministic walkthrough。不要 `cat .env`，不要共享 API key。
+
+命令读取 Forge 根目录 `.env`，并把模型过程交给现有 CLI。wrapper 自己的最终 receipt `live.portfolio <status> <reason>` 只有脱敏 status/reason code，不打印环境值、API key 或 authorization header；这不代表 inherited child terminal 已经被整体脱敏。
 
 ```bash
 npm run demo:portfolio:live
@@ -248,7 +250,9 @@ Live 命令在系统临时目录创建独立 Git fixture。它不加载当前项
 
 模型收到固定的 c17c 协议约束，但没有拿到具体代码答案。它必须在 root run 中建立唯一的 `task_001` edit task，Leader 先 assign 给自己，再同步 delegate 一个 `profile=edit` child。child 只修改 `src/slugify.mjs`、运行 `npm test`、提交 artifact evidence 和 handoff。Leader 用 child 的注册 source 提交结果，调用 `task_verify` 和 `task_integrate`，再由 `CompletionGate` 与 root verifier 控制 final。
 
-### 现场会出现的四类 approval
+### Evidence validator 要求的四类 protocol approval
+
+下面四项是 `validateLivePortfolioEvidence()` 要求存在的协议审批类别。它们不是一次 Live run 中全部可能出现的审批。
 
 | 顺序 | 动作 | 为什么需要 approval | 应讲的重点 |
 | --- | --- | --- | --- |
@@ -257,7 +261,7 @@ Live 命令在系统临时目录创建独立 Git fixture。它不加载当前项
 | 3 | `task_verify` | 在注册 source Worktree 中运行 contract command | verification command 由 task contract 冻结，不能临时换成更容易通过的命令。 |
 | 4 | `task_integrate` | 创建 source commit 并 cherry-pick 到 Leader target | pass 只证明 source；receipt 才证明改动已进 target。 |
 
-如果模型多次 `edit`/`write`，每次都可能要求 approval。不要把“模型动作数可变”误说成“Runtime 没有固定边界”。固定的是 policy 和最后的 evidence validator。
+child 的 `edit`/`write` 可以有一次或多次，具体 mutation 数量可变。child 通过 Bash 运行 `npm test` 时，当前 default policy 不把它当成 simple inspect command，因此会出现额外的 `ask` approval；其他非 inspect Bash command 也可能带来额外审批。操作人按实际 Runtime policy 逐次判断，不预设总审批次数。固定的是 action boundary 和 validator 要求的四类 protocol approval。
 
 ### 5 到 8 分钟时间线
 
@@ -267,7 +271,7 @@ Live 命令在系统临时目录创建独立 Git fixture。它不加载当前项
 | `0:30-1:00` | 运行命令，说明 wrapper 已先检查 fixture 的初始红测 | “fixture 的 acceptance 很窄，只修 slugify 的 trim/lowercase/whitespace 行为，避免把面试变成开放式 coding。初始红测是 wrapper 的前置检查，命令不需要打印它的完整输出。” |
 | `1:00-3:30` | 逐次审批 delegate 与 child mutation | “Runtime 先批准具体动作，再执行。child 在独立 Worktree，Leader 不相信模型自己报的 workspace path。” |
 | `3:30-5:30` | 审批 `task_verify` 与 `task_integrate` | “两步分开。source 先跑 `npm test`，fingerprint 没 drift 才能整合；Git receipt 使 target 的事实可以被检查。” |
-| `5:30-6:30` | 观察 final status | “wrapper 读取 root Trace 和 TaskGraph，只在 root verification pass、唯一 edit task completed、child source、verdict 和 integration receipt 都存在时给 PASS。” |
+| `5:30-6:30` | 观察 wrapper 的最终 receipt | “wrapper 读取 root Trace 和 TaskGraph，只在 root verification pass、唯一 edit task completed、child source、verdict 和 integration receipt 都存在时给 PASS。这个 receipt 脱敏，但前面的 inherited terminal transcript 不是录屏素材。” |
 | `6:30-8:00` | 如果对方继续追问，打开 `src/portfolio/live.ts` | “这里验证的是一个临时 fixture 的证据边界，不验证模型 reasoning，也不把这次结果升级为长期开源 evidence。” |
 
 ### 失败切换话术
@@ -277,6 +281,7 @@ Live 命令在系统临时目录创建独立 Git fixture。它不加载当前项
 | `UNAVAILABLE missing_environment` 或 `interactive_terminal_required` | “这个模式刻意要求已准备好的交互环境。我切回 deterministic walkthrough，它覆盖同样的 Runtime 边界且不依赖 provider。” |
 | provider 或模型 child 失败 | “这是 variable Live path 的预期风险，不在面试中调试。静态的 source、tests 和 deterministic demo 才是这次解释的基础。” |
 | approval 被拒绝 | “拒绝本身说明 action boundary 生效。这次 live run 应按非零状态退出并清理 fixture，我不会把它当成功证据。” |
+| 出现意外的敏感值、绝对路径或 provider/Runtime error | “我现在停止共享或中断命令，不保留这段输出。接下来切回不读取 `.env`、不调用模型的 deterministic walkthrough。” |
 | 收到 `SIGINT`/`SIGTERM` | “wrapper 会把中断传给 child 并清理临时仓库。接下来直接回到 deterministic 命令。” |
 
 ## 25 道核心题
