@@ -14,7 +14,7 @@ Forge Harness 是一个从零构建的 TypeScript coding-agent Runtime。它从�
   -> 工具返回统一结果
   -> 结果进入有界上下文与持久 Trace
   -> 异步、任务、Git、验证义务全部收敛
-  -> candidate 才能变成 final
+  -> `CompletionGate` ready 后进入 finalization；若配置 root verifier，还须 verifier pass
 ```
 
 ## 一、从最小 loop 到 c17c：每个机制为什么出现
@@ -49,8 +49,8 @@ CLI 在第一次模型调用之前就准备 Runtime 边界：创建 root `Sessio
 ```text
 CLI / src/cli/index.ts
   -> createCliSessionTrace()                         # session.json + trace.jsonl
-  -> assemblePrompt()                               # instructions / memory / selected skill
-  -> createInputHistoryManager().modelInput()       # task + summary + recent rounds
+  -> assemblePrompt()                               # Session 初始化时组装稳定 instructions / memory / selected skill
+  -> createInputHistoryManager().modelInput()       # 每轮：pinned task + summary + recent rounds + notifications
   -> responseCreate()                               # model request
   -> function_call?
        -> PermissionPolicy.decide()                 # allow / ask / deny
@@ -63,8 +63,8 @@ CLI / src/cli/index.ts
   -> no tool / candidate answer
        -> settle background / child / teammate IPC
        -> CompletionGate                            # incomplete / failed / ready
-       -> root Verifier
-       -> recovery，或 final_answer + session_ended
+       -> 配置 root verifier 时：verifier / recovery
+       -> final_answer + session_ended
 ```
 
 这里有三个经常被混淆的对象：
@@ -106,7 +106,7 @@ CLI / src/cli/index.ts
 | 复盘角度 | 要点 |
 | --- | --- |
 | 问题 | raw transcript、工具大输出、skills、memory、mailbox 和 handoff 会争夺 context window；下一轮既不能失忆，也不能无限增长。 |
-| 控制/数据流 | `ToolResult -> projectObservation() -> bounded function_call_output`；`assemblePrompt()` 每轮重建 instructions；history manager 固定原任务、保留最近 rounds，并用 summary 替换旧 rounds。 |
+| 控制/数据流 | `ToolResult -> projectObservation() -> bounded function_call_output`；`assemblePrompt()` 在 Session 初始化时组装稳定 instructions；每轮由 history manager 的 `modelInput()` 提供 pinned 原任务、summary、recent rounds 与新 notification，并用 summary 替换较早 rounds。 |
 | 类型与模块 | `Observation`、`ContextProjection`、`assemblePrompt()`、`createInputHistoryManager()` 位于 `src/context/`；`ContextCompactionTrigger`、`CompactionSource`、`InputHistoryManager` 位于 `src/context/compaction.ts`。 |
 | 不变量 | 原始 user task pinned；system prompt、memory、skill catalog 不被 conversation compaction 覆盖；当前 `compacted_context` 必须进入下一次 compaction source；Trace 不参与压缩。 |
 | 失败路径 | summary 为空时显式 `context_compaction_failed`；reactive compact 后仍超过 hard budget 就停止；summary 可缺 heading，但缺项进入诊断 metadata。 |
@@ -118,9 +118,9 @@ CLI / src/cli/index.ts
 | 复盘角度 | 要点 |
 | --- | --- |
 | 问题 | 仅有对话无法回答“发生过什么”“当前卡在哪里”“哪个检查真正通过了”。 |
-| 控制/数据流 | 每个 Runtime event 追加到 `trace.jsonl`；同一事件同步更新 `RuntimeState`；candidate 触发 verifier；recoverable failure 写入下一轮 repair signal。 |
+| 控制/数据流 | 每个 Runtime event 追加到 `trace.jsonl`；同一事件同步更新 `RuntimeState`；candidate 先经过 `CompletionGate`，配置 root verifier 时才进入 verifier；可恢复的 verifier failure 写入下一轮 repair signal。 |
 | 类型与模块 | `SessionMetadata`、`TraceEventPayload`、`RecordedTraceEvent`、`RuntimeState`、`Verifier`；主要位于 `src/runtime/session.ts`、`src/runtime/trace.ts`、`src/runtime/traceRecorder.ts`、`src/runtime/state.ts`、`src/runtime/verification.ts`。 |
-| 不变量 | Trace 按 Session ID、sequence、timestamp 有序；final answer 只能出现在 verifier pass 后；TaskGraph evidence 要保留 actor identity；Git integration 要留下 receipt。 |
+| 不变量 | Trace 按 Session ID、sequence、timestamp 有序；final answer 只能在 `CompletionGate` ready 后记录，配置 root verifier 时还必须先通过 verifier；TaskGraph evidence 要保留 actor identity；Git integration 要留下 receipt。 |
 | 失败路径 | verifier fail 可以进入一次默认 recovery；blocked 或 recovery budget 耗尽时不记录 final；invalid Trace schema 会让 eval attempt 成为 `INVALID`，不冒充行为失败。 |
 | 取舍 | 当前 projection 轻量、适合决策，但不能从 crash 后自动恢复；没有 event replay、resume、reconciliation 或持久 `state.json`。 |
 | 证据 | `test/runtime/session.test.ts`、`traceRecorder.test.ts`、`state.test.ts`、`verification.test.ts`；`docs/assets/evidence/verification-recovery.json`。 |
@@ -195,7 +195,7 @@ create(kind=edit, verificationCommand)
   -> teammate_shutdown
 ```
 
-contract 在 acquire 后冻结。`task_update` 只能修改或删除尚未 acquire 的 pending contract，不能直接写 status、owner、plan、verdict、receipt 或 blocker。协议动作统一走 `task_transition`，并按 actor role 二次校验。
+contract 在 acquire 后冻结。`task_update` 只能修改或删除尚未 acquire 的 pending contract，不能直接写 status、owner、plan、verdict、receipt 或 blocker。ownership、plan 和 result submission 的状态变更走 `task_transition`；`task_verify` 与 `task_integrate` 是各自的专用工具。它们都按 actor role 二次校验。
 
 ### 4. one-shot edit child 路径
 
@@ -257,9 +257,9 @@ fingerprint 输入包括：source `HEAD`、排序后的 Git status、每个 chan
 | --- | --- |
 | `incomplete` | 仍有可执行义务，例如 edit 待 verify/integrate、child 尚未 handoff、teammate 未停止；blocker 回到下一轮。 |
 | `failed` | blocked task、degraded graph、owner failure、未清理 cherry-pick 等终止性问题；root run 失败。 |
-| `ready` | 所有 task completed；graph healthy；无 pending background/child；teammates 全部 stopped 且 unread=0；无 cherry-pick in progress。随后才运行 root verifier。 |
+| `ready` | 所有 task completed；graph healthy；无 pending background/child；teammates 全部 stopped 且 unread=0；无 cherry-pick in progress。随后进入 finalization；仅在配置 root verifier 时才运行它。 |
 
-root verifier pass 后，才记录 `final_answer` 与 `session_ended(completed)`。Gate ready 当前没有单独事件，要从完整不变量链、根级 `verification_result`、`final_answer` 和 `session_ended` 推断。
+`final_answer` 与 `session_ended(completed)` 的前提是 Gate ready；若配置 root verifier，还需要其 pass。Gate ready 当前没有单独事件，要从完整不变量链、配置 verifier 时的根级 `verification_result`、`final_answer` 和 `session_ended` 推断。
 
 ## 五、c17c 常见失败路径
 
@@ -380,13 +380,13 @@ npm run eval -- run --model <model>
 
 | 顺序 | 阅读路径 | 带着什么问题读 |
 | ---: | --- | --- |
-| 1 | `src/core/minimalLoop.ts` | round、permission、notification、candidate、gate、verifier 的先后顺序是什么？ |
+| 1 | `src/core/minimalLoop.ts` | round、permission、notification、candidate、gate 与按需运行的 verifier 的先后顺序是什么？ |
 | 2 | `src/tools/runtime.ts`、`src/tools/compositeRuntime.ts`、`src/governance/defaultPolicy.ts` | policy 与 dispatch 怎样解耦，unknown/duplicate 怎样 fail closed？ |
 | 3 | `src/context/projection.ts`、`src/context/promptAssembly.ts`、`src/context/compaction.ts` | tool result、instructions、history 各自怎样进入 model input？ |
 | 4 | `src/runtime/session.ts`、`src/runtime/trace.ts`、`src/runtime/state.ts` | durable ledger 与 current projection 怎样分工？ |
 | 5 | `src/extensions/childSessions.ts`、`src/extensions/teammates.ts`、`src/runtime/teamMailbox.ts` | fresh child 与 long-lived teammate 的生命周期差异是什么？ |
 | 6 | `src/domain/teamTask.ts`、`src/runtime/teamTaskStore.ts` | TaskGraph contract、状态机、actor 权限和 revision 如何落地？ |
-| 7 | `src/tools/teamTaskTools.ts` | 模型看到的 role-scoped tool surface 如何映射到 store transition？ |
+| 7 | `src/tools/teamTaskTools.ts` | 模型看到的 role-scoped tool surface 如何分别映射 ownership/plan/result transition 与 verification/integration mutation？ |
 | 8 | `src/runtime/gitIntegration.ts`、`src/runtime/completionGate.ts` | source fingerprint、verification、receipt 和 final gate 如何闭环？ |
 | 9 | 对应 `test/` 文件与两条 smoke | 正向路径和失败路径分别由什么 deterministic evidence 覆盖？ |
 | 10 | `src/eval/`、`docs/offline-eval.md` | 行为结果、hard invariant、infrastructure invalid 和 comparability 怎样区分？ |
@@ -429,7 +429,7 @@ npm run eval -- run --model <model>
 - one-shot child 为什么不能成为 TaskGraph owner？
 - teammate plan approval 与 delegate approval 分别批准什么？
 - source fingerprint 为什么要包含 `HEAD`、Git status 和文件内容 hash？
-- CompletionGate 为什么必须在 root verifier 之前？
+- CompletionGate 为什么必须在 root finalization 之前？配置 verifier 时，它为什么排在 verifier 之前？
 - mailbox at-most-once 与 c18 reconciliation 的关系是什么？
 - 当前 compaction P0 到底已有哪一层证据，缺哪一层证据？
 

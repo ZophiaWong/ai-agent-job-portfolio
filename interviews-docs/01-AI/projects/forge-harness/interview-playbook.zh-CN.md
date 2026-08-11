@@ -55,9 +55,9 @@ Compaction P0 仍然开放。公开的独立比较证据只记录了 `compaction
 
 > Forge Harness 的起点很简单，模型提出 tool call，Runtime 执行并把结果带回下一轮。后面的问题才更像真实 coding agent：哪些动作可以执行，长对话该给模型看什么，发生过什么怎样复盘，子任务改出的代码怎样隔离和接回主线。
 >
-> 我把这些问题归到五层。L1 管 model loop 和 tool execution；L2 在 dispatch 前做 permission policy；L3 负责 prompt assembly、bounded observation 和 compaction；L4 把 Session、Trace、RuntimeState、verification 做成可检查的运行事实；L5 处理 background work、child、Worktree、TaskGraph 和 team completion。
+> 我把这些问题归到五层。L1 管 model loop 和 tool execution；L2 在 dispatch 前做 permission policy；L3 在 Session 初始化时组装稳定 instructions，并管理 bounded observation、每轮 model input 和 compaction；L4 把 Session、Trace、RuntimeState、verification 做成可检查的运行事实；L5 处理 background work、child、Worktree、TaskGraph 和 team completion。
 >
-> 当前 c17c 把五层接在一个 edit task 上。长期 teammate 要先提交 plan，Leader 批准后才有协议资格去写；one-shot edit child 则先经过 delegate approval，并在独立 Worktree 内逐次请求写入批准。提交结果后，还要让 Runtime 验证固定 command、比较 fingerprint、生成 Git receipt。`CompletionGate` 会拦住过早的 candidate，root verifier 通过后才写 final。项目明确没有 OS sandbox、崩溃后的 replay/resume/reconciliation 或分布式协调。
+> 当前 c17c 把五层接在一个 edit task 上。长期 teammate 要先提交 plan，Leader 批准后才有协议资格去写；one-shot edit child 则先经过 delegate approval，并在独立 Worktree 内逐次请求写入批准。提交结果后，还要让 Runtime 验证固定 command、比较 fingerprint、生成 Git receipt。`CompletionGate` 会拦住过早的 candidate；Gate ready 后进入 finalization，配置 root verifier 时还须 verifier pass 才写 final。项目明确没有 OS sandbox、崩溃后的 replay/resume/reconciliation 或分布式协调。
 
 ### 180 秒
 
@@ -81,7 +81,9 @@ Leader root Session
   -> long-lived teammate：claim -> submit_plan -> Leader review_plan -> edit
   -> one-shot child：Leader owns task -> delegate(profile=edit) -> isolated child
   -> source fingerprint -> task_verify -> task_integrate -> Git receipt
-  -> CompletionGate -> root verifier -> final_answer
+  -> CompletionGate ready
+       -> 未配置 root verifier：final_answer
+       -> 配置 root verifier：pass 后才 final_answer
 ```
 
 ### 2 到 3 分钟口述
@@ -92,7 +94,7 @@ Leader root Session
 >
 > child 或 teammate 交件后，Leader 不能相信模型提供的任意 workspace path。Runtime 从注册表解析 source，记录 Git fingerprint，用 task contract 里的 command 验证。如果 verification 通过，task 仍然停在 `submitted`，因为那只能说明 source 在该时刻通过检查。`task_integrate` 再创建 source commit、cherry-pick 到 Leader target，并写入 Git receipt，task 才变成 `completed`。
 >
-> root 模型即使先给了 candidate，`CompletionGate` 也会先检查 child、teammate、TaskGraph、background work 和 Git 状态。只要有待 verification、待 integration、未 shutdown 的 teammate 或 unread mailbox，它就返回 `incomplete`。所有义务收敛后，才运行 root verifier；通过以后才有 `final_answer` 和 `session_ended(completed)`。这套协议没有做 crash recovery 或分布式调度，所以发生 Git side effect 后崩溃的 reconciliation 是明确留给后续章节的问题。
+> root 模型即使先给了 candidate，`CompletionGate` 也会先检查 child、teammate、TaskGraph、background work 和 Git 状态。只要有待 verification、待 integration、未 shutdown 的 teammate 或 unread mailbox，它就返回 `incomplete`。所有义务收敛到 Gate ready 后才进入 finalization；如果配置 root verifier，它必须通过，未配置时 loop 直接记录 `final_answer` 与 `session_ended(completed)`。这套协议没有做 crash recovery 或分布式调度，所以发生 Git side effect 后崩溃的 reconciliation 是明确留给后续章节的问题。
 
 ### 可以给出的证据入口
 
@@ -294,7 +296,7 @@ child 的 `edit`/`write` 可以有一次或多次，具体 mutation 数量可变
 | 2. `ToolResult` 为什么是统一类型？ | 让 built-in、MCP 和插件动作返回统一的 status、summary、content 与 metadata，避免 core loop 认识每个工具细节。 |
 | 3. unknown tool 如何处理？ | fail closed，不能因为模型给出一个名字就路由到任意实现。 |
 | 4. 为什么一轮只处理一个 tool call？ | 教程优先选择可观察的控制流，代价是复杂任务可能增加 round 数。 |
-| 5. candidate 和 final 为什么分开？ | candidate 只是模型当前回答；final 还受 pending work、gate 与 verifier 控制。 |
+| 5. candidate 和 final 为什么分开？ | candidate 只是模型当前回答；final 要等 pending work 收敛、`CompletionGate` ready，配置 root verifier 时还要通过 verifier。 |
 
 ### L2 Governance & Action Boundary
 
@@ -311,7 +313,7 @@ child 的 `edit`/`write` 可以有一次或多次，具体 mutation 数量可变
 | 问题 | 回答锚点 |
 | --- | --- |
 | 11. 为什么不把 raw tool output 全回填？ | 大输出会耗尽输入预算；`Observation` 留模型下一步确实需要的有界内容。 |
-| 12. prompt assembly 包含什么？ | 原始 task、system instructions、selected skill/memory、recent rounds、summary 和当前 notification。 |
+| 12. prompt assembly 与每轮 model input 分别包含什么？ | `assemblePrompt()` 在 Session 初始化时从 task 和 prompt assets 组装稳定 instructions；每轮 `modelInput()` 则使用 pinned task、summary、recent rounds 和当前 notification。 |
 | 13. compaction 如何避免丢 pinned task？ | 原任务独立固定在 model input；压缩的是可替换的旧 rounds。 |
 | 14. repeated compaction 的风险是什么？ | 第二次压缩不能丢掉第一次 summary 的事实，因此 current `compacted_context` 要参与下一次 source。 |
 | 15. summary 可以当 evidence 吗？ | 不可以。它是有损决策 handoff；Trace、RuntimeState 和 TaskGraph 承担不同的持久事实。 |
@@ -334,7 +336,7 @@ child 的 `edit`/`write` 可以有一次或多次，具体 mutation 数量可变
 | 22. plan approval 与 delegate approval 的区别？ | 前者批准 teammate 的 TaskGraph plan，后者批准启动一个 write-capable child；两者都不代替每次写入 approval。 |
 | 23. 为什么 source 要用 fingerprint？ | 防止 verified source 与 later integration source 不一致，也检测 verifier 意外改动 source 的 drift。 |
 | 24. verification pass 后为什么仍不是 completed？ | verification 只证明 source command；Git integration receipt 才证明改动已进入 Leader target。 |
-| 25. CompletionGate 检查什么？ | task terminal 状态、graph health、background/child、teammate shutdown/unread mailbox 与 cherry-pick 状态；它在 root verifier 前执行。 |
+| 25. CompletionGate 检查什么？ | task terminal 状态、graph health、background/child、teammate shutdown/unread mailbox 与 cherry-pick 状态；它在 root finalization 前执行，配置 verifier 时也在 verifier 前执行。 |
 
 ## 10 道压力题
 
@@ -361,7 +363,7 @@ child 的 `edit`/`write` 可以有一次或多次，具体 mutation 数量可变
 
 > I built Forge Harness to make the control flow of a coding agent explicit. The Runtime has five responsibilities: the model and tool loop, action governance before dispatch, bounded model context, durable runtime evidence, and coordination across child sessions, Worktrees, and team tasks.
 >
-> The c17c protocol joins those responsibilities around an edit task. A task has an owner and a frozen verification contract. A teammate needs plan approval before it can write, while a one-shot edit child needs a separate delegation approval and still requests approval for each file mutation. The source is fingerprinted, verified, integrated through Git, and recorded with a receipt. A completion gate blocks a premature candidate until the remaining obligations settle, then the root verifier controls the final answer.
+> The c17c protocol joins those responsibilities around an edit task. A task has an owner and a frozen verification contract. A teammate needs plan approval before it can write, while a one-shot edit child needs a separate delegation approval and still requests approval for each file mutation. The source is fingerprinted, verified, integrated through Git, and recorded with a receipt. A completion gate blocks a premature candidate until the remaining obligations settle. Once it is ready, finalization can proceed; if a root verifier is configured, it must pass before the final answer.
 >
 > I also kept deterministic tests and offline evaluations separate from live model observations. One fixed compaction comparison fell from three ordered reads to two. I kept that red comparable result rather than resampling it, and I do not claim post-fix independent validation yet.
 
@@ -390,7 +392,7 @@ child 的 `edit`/`write` 可以有一次或多次，具体 mutation 数量可变
 | “Worktree 隔离了一切。” | Worktree 隔离 Git 改动和 source provenance，不隔离进程、网络、credentials 或 host permissions。 |
 | “13-attempt eval 证明通用能力或统计显著性。” | 它比较固定场景中的行为和 hard invariant，不推出更广泛结论。 |
 | “compaction 已经通过 post-fix eval 验证。” | 当前只有 frozen `3/3 -> 2/3` 红色 candidate；源码修复和测试存在，但 post-fix independent comparable candidate 未完成。 |
-| “candidate 一出现就完成。” | candidate 仍要经过 pending work 收敛、CompletionGate 和 root verifier。 |
+| “candidate 一出现就完成。” | candidate 仍要经过 pending work 收敛和 `CompletionGate`；配置 root verifier 时，还必须通过 verifier。 |
 | “verification pass 就代表 edit 已经集成。” | verification pass 后仍是 `submitted`；Git integration receipt 才让 task `completed`。 |
 | “Live demo 是稳定证据。” | Live 命令是一次可变的 operator walkthrough，不进 CI，也不作为可复用 evidence。 |
 | “P1 branch 的命令已经在 main 发布。” | `demo:portfolio:live` 目前在 `codex/add-recruiter-portfolio` 分支，合并前应按分支状态描述。 |
