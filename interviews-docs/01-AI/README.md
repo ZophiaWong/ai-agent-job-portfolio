@@ -1,5 +1,10 @@
 ## Index
 
+## 项目复习
+
+- [Forge Harness 技术学习指南](projects/forge-harness/study-guide.zh-CN.md)：按五层 Runtime 架构复习机制、源码入口、证据与已知边界。
+- [Forge Harness 面试 Playbook](projects/forge-harness/interview-playbook.zh-CN.md)：整理项目介绍、演示流程、追问与口述提示。
+
 Example:
 
 ```
