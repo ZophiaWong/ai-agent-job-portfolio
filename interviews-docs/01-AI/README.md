@@ -23,3 +23,8 @@
 - [端到端实战 Lab 与代码骨架](../../AI_Agent_System_Practical_Reference/Part_05_框架专项与实战Lab/16_端到端实战Lab与代码骨架.md)
 - [项目设计模板与架构表达](../../AI_Agent_System_Practical_Reference/Part_04_项目与面试表达/11_项目设计模板与架构表达.md)
 - [项目证据索引](../../projects/README.md)
+
+## Forge Harness 面试准备
+
+- [技术学习指南](projects/forge-harness/study-guide.zh-CN.md)：按五层 Runtime 架构复习机制、源码入口、证据与已知边界。
+- [面试 Playbook](projects/forge-harness/interview-playbook.zh-CN.md)：整理项目介绍、演示流程、追问与口述提示。
