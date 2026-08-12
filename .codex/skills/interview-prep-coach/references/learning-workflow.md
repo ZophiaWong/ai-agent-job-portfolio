@@ -2,37 +2,60 @@
 
 ## Focus Selection
 
-Choose one study focus from `weaknesses.md` and `plan.md`. Prefer:
-1. `P0` open weaknesses.
-2. Weaknesses tied to current JD or target role.
-3. Recent mock failures.
-4. User-requested topics.
+Choose one primary competency from the matrix, weaknesses, and plan. Rank work by:
 
-Search repo materials with `rg` before using external sources. Useful local areas include:
+1. Target-role priority and target/current gap.
+2. P0/P1 evidence-backed weaknesses.
+3. Low-confidence or unstable core capabilities.
+4. Recent mock/real-interview failures and explicit user feedback.
+5. Remaining time before applications or an interview.
+
+Use `interactive-learning-workflow.md` for the session itself. Do not select work merely because
+a document is unread or a topic is interesting.
+
+## Two-Day Baseline Diagnostic
+
+Use the first two preparation days to establish evidence without attempting exhaustive coverage:
+
+- Day 1: C02-C06, C08-C10, MeterDesk, and Forge Harness.
+- Day 2: C01, C07, C11-C13, Python coding, SQL/DSA, and career communication.
+
+Ask one question per turn. Record `unassessed` instead of guessing when time does not permit a
+valid check. Generate the 2-3 week plan only after summarizing both days' evidence.
+
+## Daily Plan
+
+Default to 8+ hours while allowing evidence to change the allocation:
+
+- 3h focused learning on the highest-priority competency gap.
+- 1.5h retrieval, coding, or SQL practice.
+- 1.5h MeterDesk or Forge Harness deep dive.
+- 1h mock interview.
+- 0.5h resume, introduction, or behavioral practice.
+- 0.5h review and proposed state updates.
+
+Every block must name evidence to produce. Do not treat time spent as completion.
+
+## Study Session Selection
+
+Search the repository first. Useful local areas include:
+
 - `AI_Agent_System_Practical_Reference/`
 - `interviews-docs/`
 - `learning-materials/`
 - `best-practice/`
 
-## Study Session Shape
-
-1. Name the weak spot and why it matters for interviews.
-2. Teach the minimum concept needed to fix it.
-3. Ask a short retrieval question or mini mock question.
-4. Evaluate the user's answer.
-5. Update the weakness status or next action.
-6. Update the plan with the next mock or study step.
-
-Keep sessions narrow. One weak spot per session is usually enough.
+Use stable local sources for principles. For changing APIs, libraries, models, laws, or current
+product behavior, use official primary sources and record access date/version.
 
 ## Post-Interview Review
 
 When the user provides real interview notes:
 1. Extract company, role, round, date, questions, answer quality, and surprises if present.
 2. Identify recurring weak spots and new gaps.
-3. Merge them into `weaknesses.md` with evidence.
-4. Update `plan.md` with immediate repair tasks and the next mock.
-5. Log to `sessions/review/` if the user wants local records.
+3. Map them to stable competency IDs and merge concrete gaps into `weaknesses.md`.
+4. Propose matrix and plan changes with immediate repair tasks and the next mock.
+5. Log to `sessions/review/` only after the user approves local recording.
 
 ## Anki Handoff
 

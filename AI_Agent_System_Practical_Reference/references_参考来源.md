@@ -23,20 +23,37 @@
 
 - LangGraph Overview  
   https://docs.langchain.com/oss/python/langgraph/overview
-
 - LangGraph Workflows and Agents  
   https://docs.langchain.com/oss/python/langgraph/workflows-agents
-
-- LangGraph Graph API  
+- LangGraph Interrupts：暂停、恢复、节点重启与副作用规则
+  https://docs.langchain.com/oss/python/langgraph/interrupts
+- LangGraph Persistence：checkpointer、thread 与 store 边界
+  https://docs.langchain.com/oss/python/langgraph/persistence
+- LangGraph Graph API：`Command(resume=...)`
   https://docs.langchain.com/oss/python/langgraph/graph-api
-
 - LangChain Overview  
   https://docs.langchain.com/oss/python/langchain/overview
 
+访问日期：2026-07-19。框架代码片段按这些页面核对；仍需在具体项目中用锁定版本验证。
+
 ### Model Context Protocol
 
-- MCP Tools Specification  
-  https://modelcontextprotocol.io/specification/2025-06-18/server/tools
+- MCP Architecture：Host、Client、Server 和协议分层
+  https://modelcontextprotocol.io/docs/learn/architecture
+- MCP Lifecycle（2025-11-25 稳定规范）
+  https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle
+- MCP Transports（stdio、Streamable HTTP）
+  https://modelcontextprotocol.io/specification/2025-11-25/basic/transports
+- MCP Authorization（HTTP 授权与 token audience）
+  https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization
+- MCP Tools
+  https://modelcontextprotocol.io/specification/2025-11-25/server/tools
+- MCP Resources
+  https://modelcontextprotocol.io/specification/2025-11-25/server/resources
+- MCP Prompts
+  https://modelcontextprotocol.io/specification/2025-11-25/server/prompts
+
+访问日期：2026-07-19。本手册以 MCP 2025-11-25 稳定规范为基线；实验功能必须明确标注，不静默混入稳定协议说明。
 
 ### LlamaIndex / CrewAI / AutoGen
 

@@ -2,10 +2,27 @@
 import argparse
 from pathlib import Path
 
-STATE_REL = Path('.local') / 'interview-prep'
-REQUIRED_FILES = ['goal.md', 'plan.md', 'weaknesses.md', 'resume.md', 'projects.md']
+from state_utils import STATE_REL, ensure_within_boundary, state_dir_for
+
+
+REQUIRED_FILES = [
+    'goal.md',
+    'plan.md',
+    'weaknesses.md',
+    'resume.md',
+    'projects.md',
+    'competency-matrix.md',
+    'daily.md',
+    'introduction.md',
+    'stories.md',
+]
 OPTIONAL_FILES = ['jd.md']
-REQUIRED_DIRS = ['sessions/mock', 'sessions/learn', 'sessions/review']
+REQUIRED_DIRS = [
+    'sessions/diagnostic',
+    'sessions/mock',
+    'sessions/learn',
+    'sessions/review',
+]
 
 
 def parse_args():
@@ -17,25 +34,49 @@ def parse_args():
 def main():
     args = parse_args()
     root = Path(args.root).resolve()
-    state_dir = root / STATE_REL
+    try:
+        state_dir = state_dir_for(root)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     missing_required = []
     missing_optional = []
 
     for name in REQUIRED_FILES:
-        if not (state_dir / name).is_file():
+        try:
+            target = ensure_within_boundary(
+                state_dir / name, state_dir, root, f'state file {name}'
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+        if not target.is_file():
             missing_required.append(str(STATE_REL / name))
     for name in OPTIONAL_FILES:
-        if not (state_dir / name).is_file():
+        try:
+            target = ensure_within_boundary(
+                state_dir / name, state_dir, root, f'state file {name}'
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+        if not target.is_file():
             missing_optional.append(str(STATE_REL / name))
     for name in REQUIRED_DIRS:
-        if not (state_dir / name).is_dir():
+        try:
+            target = ensure_within_boundary(
+                state_dir / name, state_dir, root, f'session directory {name}'
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+        if not target.is_dir():
             missing_required.append(str(STATE_REL / name) + '/')
 
     if missing_required:
         print('Missing required interview prep state:')
         for item in missing_required:
             print(f'- {item}')
-        print('Run scripts/init-interview-prep --root <repo> to create templates.')
+        print(
+            'Run .codex/skills/interview-prep-coach/scripts/'
+            'init-interview-prep --root <repo> to create templates.'
+        )
         return 1
 
     print('Interview prep state ready.')

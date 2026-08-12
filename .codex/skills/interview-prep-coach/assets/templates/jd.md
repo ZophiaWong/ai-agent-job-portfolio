@@ -15,3 +15,11 @@ Paste a target job description or company-specific requirements here when availa
 ## Likely Interview Focus
 
 - 
+
+## Competency Overlay
+
+Reference stable IDs from the public competency model. Do not create a parallel matrix.
+
+| Competency ID | Generic Target | JD Target | JD Priority | Evidence Needed |
+| --- | ---: | ---: | --- | --- |
+|  |  |  |  |  |

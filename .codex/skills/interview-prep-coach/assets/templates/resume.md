@@ -13,4 +13,6 @@ Private resume/profile notes for interview personalization.
 
 ## Claims To Stress-Test
 
-- 
+| Claim | Competency ID | Public / Project Evidence | Likely Follow-up | Status |
+| --- | --- | --- | --- | --- |
+|  |  |  |  | draft |

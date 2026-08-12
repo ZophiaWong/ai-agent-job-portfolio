@@ -3,9 +3,22 @@ import argparse
 import shutil
 from pathlib import Path
 
-STATE_REL = Path('.local') / 'interview-prep'
-TEMPLATE_FILES = ['goal.md', 'plan.md', 'weaknesses.md', 'resume.md', 'projects.md', 'jd.md']
-SESSION_DIRS = ['mock', 'learn', 'review']
+from state_utils import STATE_REL, ensure_within_boundary, state_dir_for
+
+
+TEMPLATE_FILES = [
+    'goal.md',
+    'plan.md',
+    'weaknesses.md',
+    'resume.md',
+    'projects.md',
+    'competency-matrix.md',
+    'daily.md',
+    'introduction.md',
+    'stories.md',
+    'jd.md',
+]
+SESSION_DIRS = ['diagnostic', 'mock', 'learn', 'review']
 
 
 def parse_args():
@@ -17,24 +30,50 @@ def parse_args():
 def main():
     args = parse_args()
     root = Path(args.root).resolve()
-    state_dir = root / STATE_REL
+    try:
+        state_dir = state_dir_for(root)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     templates_dir = Path(__file__).resolve().parents[1] / 'assets' / 'templates'
     created = []
     preserved = []
 
     state_dir.mkdir(parents=True, exist_ok=True)
     for name in TEMPLATE_FILES:
-        target = state_dir / name
+        try:
+            target = ensure_within_boundary(
+                state_dir / name, state_dir, root, f'state file {name}'
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
         source = templates_dir / name
         if target.exists():
+            if not target.is_file():
+                raise SystemExit(
+                    f'Expected state file but found another node type: '
+                    f'{target.relative_to(root)}'
+                )
             preserved.append(str(target.relative_to(root)))
             continue
         shutil.copyfile(source, target)
         created.append(str(target.relative_to(root)))
 
     for session_type in SESSION_DIRS:
-        session_dir = state_dir / 'sessions' / session_type
+        try:
+            session_dir = ensure_within_boundary(
+                state_dir / 'sessions' / session_type,
+                state_dir,
+                root,
+                f'{session_type} session directory',
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
         if session_dir.exists():
+            if not session_dir.is_dir():
+                raise SystemExit(
+                    f'Expected session directory but found another node type: '
+                    f'{session_dir.relative_to(root)}'
+                )
             preserved.append(str(session_dir.relative_to(root)) + '/')
         else:
             session_dir.mkdir(parents=True)
@@ -49,7 +88,10 @@ def main():
         print('Preserved:')
         for item in preserved:
             print(f'- {item}')
-    print('Fill in goal.md, resume.md, and projects.md before mock sessions. jd.md is optional.')
+    print(
+        'Fill in goal.md, resume.md, and projects.md before diagnostic or mock '
+        'sessions. jd.md is optional.'
+    )
     return 0
 
 
