@@ -1,4 +1,0 @@
-interface:
-  display_name: "Job Application Tracker"
-  short_description: "Match confirmed JDs to versioned project evidence"
-  default_prompt: "Use $job-application-tracker to evaluate a confirmed Notion job and prepare evidence-backed project bullets."
