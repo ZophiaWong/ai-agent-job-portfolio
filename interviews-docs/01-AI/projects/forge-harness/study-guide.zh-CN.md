@@ -347,6 +347,20 @@ npm run smoke:c17c-child
 npm run eval -- run --model <model>
 ```
 
+### 面试 Live launcher 的边界
+
+`npm run demo:portfolio:live` 不是另一个 Runtime。它只是面试时使用的薄启动器：通过 `fs.mkdtemp()` 在系统临时目录现场生成独立的 retry-policy Git fixture，确认初始 `npm test` 失败，再用参数数组启动现有 Forge CLI：
+
+```bash
+forge-harness --worktree --verify "npm test" "<focused retry task>"
+```
+
+Fixture 提交 `.gitignore` 并忽略 `.forge/`，否则 Session 初始化先创建的 `.forge/` 会让后续 root Worktree dirty check 失败。这个修复只属于 disposable fixture，不放宽通用 workspace 检查。
+
+演示固定一个 edit task 和一个同步 edit child，是为了控制时长、拓扑和证据归属，不代表 Runtime 只能处理一个任务。模型仍自行决定 task 文案、文件阅读、`src/**` 实现、编辑次数和协议调用顺序。Child 不具备 Bash；Leader 在 child source 上执行 `task_verify`，集成后 root verifier 再运行 `npm test`。
+
+Launcher 使用 inherited terminal 显示原始 Runtime transcript 与人工审批，只在前后打印简短 `[demo]` 说明。它最多运行 10 分钟，超时先发 `SIGTERM`，两秒后再发 `SIGKILL`，并在所有结束路径清理 fixture。这个过程只是一次可变模型运行观察，不是 benchmark、CI 检查或可复用 evidence。
+
 “offline” 只表示不承载真实用户流量。canonical eval 仍调用模型 API、需要凭据并消耗 token。固定套件是 `3 + 3 + 3 + 3 + 1 = 13` 次 attempts，场景包括 governed read-only、verification recovery、compaction retention、async child handoff 和 c17c team completion。v1 使用 deterministic grader，不使用 LLM-as-a-judge。
 
 ### 当前 P0：compaction 证据没有闭环
