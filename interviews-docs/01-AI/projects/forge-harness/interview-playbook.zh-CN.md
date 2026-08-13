@@ -235,7 +235,7 @@ explain.coordination-completion task=approved gate=incomplete worktree=written f
 
 Live child 使用 `stdio: "inherit"` 直接继承当前 terminal，因此屏幕上可能出现可变的 model/tool text、provider failure 和 Runtime path。它只能用于受控的私下 screen-share，绝不录制，也不把 transcript、截图或结果当作公开 evidence。如果出现意外的敏感值、绝对路径或错误内容，立刻停止共享或中断命令，改用 deterministic walkthrough。不要 `cat .env`，不要共享 API key。
 
-命令读取 Forge 根目录 `.env`，并把模型过程交给现有 CLI。wrapper 自己的最终 receipt `live.portfolio <status> <reason>` 只有脱敏 status/reason code，不打印环境值、API key 或 authorization header；这不代表 inherited child terminal 已经被整体脱敏。
+命令读取 Forge 根目录 `.env`，并把模型过程交给现有 CLI。wrapper 只在原始 Runtime transcript 前后打印少量 `[demo]` 说明，不打印内部 reason、环境值、API key、authorization header、raw exception、raw Trace 或绝对临时路径；这不代表 inherited terminal 已经被整体脱敏。
 
 ```bash
 npm run demo:portfolio:live
@@ -243,14 +243,17 @@ npm run demo:portfolio:live
 
 ### fixture 和 Runtime 路径
 
-Live 命令在系统临时目录创建独立 Git fixture。它不加载当前项目的 plugin/MCP 配置，也不修改 Forge checkout。fixture 是无外部依赖的小 Node 项目：
+Live 命令通过 `fs.mkdtemp()` 在系统临时目录现场生成独立 Git fixture，不复制模板、不解压文件，也不依赖外部仓库。它不加载当前项目的 plugin/MCP 配置，也不修改 Forge checkout。fixture 是无外部依赖的小 Node 项目：
 
-- `src/slugify.mjs` 的初始实现未处理外围空白；
-- `node:test` 分别检查 trim、lowercase 和连续空白折叠；
+- `.gitignore` 提交 `.forge/`，避免 Session 文件让 fixture 在 root Worktree 创建前变成 dirty；
+- `src/errors.mjs` 定义 transient/permanent error，`src/retry.mjs` 包含有意留下的 retry-policy 缺陷；
+- `node:test` 检查首次成功只调用一次、transient failure 重试后成功、`maxAttempts` 是总执行次数、permanent failure 立即停止；
 - 初始 `npm test` 必须失败；
-- 成功后临时仓库会清理。
+- 成功、失败、中断或超时后都会尝试清理临时仓库。
 
-模型收到固定的 c17c 协议约束，但没有拿到具体代码答案。它必须在 root run 中建立唯一的 `task_001` edit task，Leader 先 assign 给自己，再同步 delegate 一个 `profile=edit` child。child 只修改 `src/slugify.mjs`、运行 `npm test`、提交 artifact evidence 和 handoff。Leader 用 child 的注册 source 提交结果，调用 `task_verify` 和 `task_integrate`，再由 `CompletionGate` 与 root verifier 控制 final。
+模型收到自然的 coding task 和最小 c17c 约束，没有拿到 bug 原因、文件定位、代码答案、task ID、标题、acceptance、tool 参数或逐步调用脚本。演示只固定一个 edit task 和一个同步 `profile=edit` child，以控制面试时长、协作拓扑和证据归属；这不是 Runtime 的能力上限。模型自行决定 task 文案、阅读哪些文件、怎样修改 `src/**`、编辑次数和具体 protocol call 顺序。
+
+Child 负责阅读与修改，不具备 Bash。Leader 使用 child 的注册 source 提交结果，在该 source 上通过 `task_verify` 运行 `npm test`，再用 `task_integrate` 记录 Git receipt。集成后，根级 verifier 再运行一次 `npm test`，`CompletionGate` 控制 finalization。
 
 ### Evidence validator 要求的四类 protocol approval
 
@@ -263,28 +266,29 @@ Live 命令在系统临时目录创建独立 Git fixture。它不加载当前项
 | 3 | `task_verify` | 在注册 source Worktree 中运行 contract command | verification command 由 task contract 冻结，不能临时换成更容易通过的命令。 |
 | 4 | `task_integrate` | 创建 source commit 并 cherry-pick 到 Leader target | pass 只证明 source；receipt 才证明改动已进 target。 |
 
-child 的 `edit`/`write` 可以有一次或多次，具体 mutation 数量可变。child 通过 Bash 运行 `npm test` 时，当前 default policy 不把它当成 simple inspect command，因此会出现额外的 `ask` approval；其他非 inspect Bash command 也可能带来额外审批。操作人按实际 Runtime policy 逐次判断，不预设总审批次数。固定的是 action boundary 和 validator 要求的四类 protocol approval。
+child 的 `edit`/`write` 可以有一次或多次，具体 mutation 数量可变，每次 mutation 都要逐次审批。固定的是 action boundary 和 validator 要求的四类 protocol approval，不是总审批次数。
 
 ### 5 到 8 分钟时间线
 
 | 时间 | 操作 | 讲解 |
 | --- | --- | --- |
 | `0:00-0:30` | 说明这是一条 optional Live path | “前面的 deterministic demo 是主线。这里用一次真实模型运行检查同一个项目中的 focused c17c path。” |
-| `0:30-1:00` | 运行命令，说明 wrapper 已先检查 fixture 的初始红测 | “fixture 的 acceptance 很窄，只修 slugify 的 trim/lowercase/whitespace 行为，避免把面试变成开放式 coding。初始红测是 wrapper 的前置检查，命令不需要打印它的完整输出。” |
+| `0:30-1:00` | 运行命令，说明 wrapper 已先检查 fixture 的初始红测 | “这是现场生成的 retry-policy 小项目，测试把总尝试次数和可重试错误边界写清楚。初始红测是启动模型前的前置检查。” |
 | `1:00-3:30` | 逐次审批 delegate 与 child mutation | “Runtime 先批准具体动作，再执行。child 在独立 Worktree，Leader 不相信模型自己报的 workspace path。” |
 | `3:30-5:30` | 审批 `task_verify` 与 `task_integrate` | “两步分开。source 先跑 `npm test`，fingerprint 没 drift 才能整合；Git receipt 使 target 的事实可以被检查。” |
-| `5:30-6:30` | 观察 wrapper 的最终 receipt | “wrapper 读取 root Trace 和 TaskGraph，只在 root verification pass、唯一 edit task completed、child source、verdict 和 integration receipt 都存在时给 PASS。这个 receipt 脱敏，但前面的 inherited terminal transcript 不是录屏素材。” |
+| `5:30-6:30` | 观察 wrapper 的最终说明 | “wrapper 读取 root Trace 和 TaskGraph，语义核对唯一 completed edit task、同步 child source、manual approvals、fingerprint、verification、Git receipt、root final 和 completed Session。它不另造 Runtime event。” |
 | `6:30-8:00` | 如果对方继续追问，打开 `src/portfolio/live.ts` | “这里验证的是一个临时 fixture 的证据边界，不验证模型 reasoning，也不把这次结果升级为长期开源 evidence。” |
 
 ### 失败切换话术
 
 | 发生什么 | 现场回应 |
 | --- | --- |
-| `UNAVAILABLE missing_environment` 或 `interactive_terminal_required` | “这个模式刻意要求已准备好的交互环境。我切回 deterministic walkthrough，它覆盖同样的 Runtime 边界且不依赖 provider。” |
+| 缺少凭据或 interactive terminal | “这个模式刻意要求已准备好的交互环境。我切回 deterministic walkthrough，它覆盖同样的 Runtime 边界且不依赖 provider。” |
 | provider 或模型 child 失败 | “这是 variable Live path 的预期风险，不在面试中调试。静态的 source、tests 和 deterministic demo 才是这次解释的基础。” |
 | approval 被拒绝 | “拒绝本身说明 action boundary 生效。这次 live run 应按非零状态退出并清理 fixture，我不会把它当成功证据。” |
 | 出现意外的敏感值、绝对路径或 provider/Runtime error | “我现在停止共享或中断命令，不保留这段输出。接下来切回不读取 `.env`、不调用模型的 deterministic walkthrough。” |
 | 收到 `SIGINT`/`SIGTERM` | “wrapper 会把中断传给 child 并清理临时仓库。接下来直接回到 deterministic 命令。” |
+| 超过 10 分钟 | “launcher 会先发 `SIGTERM`，两秒后仍未退出再发 `SIGKILL`，然后清理 fixture。我现在切回 deterministic walkthrough。” |
 
 ## 25 道核心题
 
